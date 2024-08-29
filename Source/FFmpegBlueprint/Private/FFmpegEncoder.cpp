@@ -62,17 +62,20 @@ void UFFmpegEncoder::Open(const FFFmpegEncoderConfig& FFmpegEncoderConfig,
 	av_dict_free(&EncodeOptions);
 
 	// open output file
-	auto OutputFilePathInANSI = StringCast<ANSICHAR>(*OutputFilePath);
+	auto OutputFilePathInUTF8 = StringCast<UTF8CHAR>(*OutputFilePath);
 	IOContext                 = nullptr;
-	if (avio_open(&IOContext, OutputFilePathInANSI.Get(), AVIO_FLAG_WRITE) < 0) {
+	if (avio_open(&IOContext,
+	              reinterpret_cast<const char*>(OutputFilePathInUTF8.Get()),
+	              AVIO_FLAG_WRITE) < 0) {
 		return Failure(FString::Printf(
 		    TEXT("Failed to initialize io context and open file: %s."),
 		    *OutputFilePath));
 	}
 
 	// allocate memory to FormatContext
-	if (avformat_alloc_output_context2(&FormatContext, nullptr, nullptr,
-	                                   OutputFilePathInANSI.Get()) < 0) {
+	if (avformat_alloc_output_context2(
+	        &FormatContext, nullptr, nullptr,
+	        reinterpret_cast<const char*>(OutputFilePathInUTF8.Get())) < 0) {
 		return Failure("Failed to allocate format context.");
 	}
 
