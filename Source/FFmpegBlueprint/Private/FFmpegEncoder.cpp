@@ -173,17 +173,39 @@ void UFFmpegEncoder::AddFrameFromRenderTarget(
 	const auto& TextureResource = TextureRenderTarget->GetResource();
 
 	// check TextureResource
-	if (nullptr == TextureResource) {}
+	if (nullptr == TextureResource) {
+		return Failure("TextureResource is nullptr");
+	}
 
-	return AddFrame(TextureResource->GetTexture2DRHI(), Result, ErrorMessage);
+	// get RHITexture
+	const auto& RHITexture = TextureResource->GetTexture2DRHI();
+
+	// check TextureResource
+	if (nullptr == RHITexture) {
+		return Failure("RHITexture is nullptr");
+	}
+
+	return AddFrame(RHITexture, Result, ErrorMessage);
 }
 
 void UFFmpegEncoder::AddFrameFromImagePath(const FString& ImagePath,
                                            FFmpegEncoderAddFrameResult& Result,
                                            FString& ErrorMessage) {
+	// helper function to finish with failure
+	const auto& Failure = [&](const FString& Message) {
+		ErrorMessage = Message;
+		UE_LOG(LogFFmpegEncoder, Error, TEXT("%s"), *ErrorMessage);
+		Result = FFmpegEncoderAddFrameResult::Failure;
+	};
+
 	// Load image from ImagePath
-	FImage Image;
-	FImageUtils::LoadImage(*ImagePath, Image);
+	FImage      Image;
+	const auto& SuccessToLoadImage = FImageUtils::LoadImage(*ImagePath, Image);
+
+	// if failed to load image
+	if (!SuccessToLoadImage) {
+		return Failure("Failed to load image.");
+	}
 
 	// Add Frame from Image
 	return AddFrame(MoveTemp(Image), Result, ErrorMessage);
