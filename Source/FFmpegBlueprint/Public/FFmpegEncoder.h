@@ -73,7 +73,7 @@ public:
 	 * a frame, and appended to the file immediately after the frame data is
 	 * finalized.
 	 */
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, meta = (ExpandEnumAsExecs = "Result"))
 	void AddFrameFromRenderTarget(
 	    const UTextureRenderTarget2D* TextureRenderTarget,
 	    FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
@@ -83,7 +83,7 @@ public:
 	 * a frame, and appended to the file immediately after the frame data is
 	 * finalized.
 	 */
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, meta = (ExpandEnumAsExecs = "Result"))
 	void AddFrameFromImagePath(const FString&               ImagePath,
 	                           FFmpegEncoderAddFrameResult& Result,
 	                           FString&                     ErrorMessage);
