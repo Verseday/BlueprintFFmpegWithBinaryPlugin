@@ -13,6 +13,11 @@ void UFFmpegEncoder::Open(const FFFmpegEncoderConfig& FFmpegEncoderConfig,
                           const FString&              OutputFilePath,
                           FFmpegEncoderOpenResult&    Result,
                           FString&                    ErrorMessage) {
+	// helper function to finish with success
+	const auto& Success = [&]() {
+		Result = FFmpegEncoderOpenResult::Success;
+	};
+
 	// helper function to finish with failure
 	const auto& Failure = [&](const FString& Message) {
 		ErrorMessage = Message;
@@ -104,7 +109,7 @@ void UFFmpegEncoder::Open(const FFFmpegEncoderConfig& FFmpegEncoderConfig,
 	}
 
 	// finish as success
-	Result = FFmpegEncoderOpenResult::Success;
+	return Success();
 }
 
 void UFFmpegEncoder::Close(FFmpegEncoderCloseResult& Result,
@@ -223,7 +228,7 @@ void UFFmpegEncoder::AddFrame(const FImage&                Image,
                               FString&                     ErrorMessage) {
 	auto FFmpegFrameWrapper = FFFmpegFrameWrapper::CreateFrame(
 	    Image, FrameIndex, Config.Width, Config.Height);
-	AddFrame(MoveTemp(FFmpegFrameWrapper), Result, ErrorMessage);
+	return AddFrame(MoveTemp(FFmpegFrameWrapper), Result, ErrorMessage);
 }
 
 void UFFmpegEncoder::AddFrame(const FFFmpegFrameWrapper&   Frame,
@@ -235,6 +240,11 @@ void UFFmpegEncoder::AddFrame(const FFFmpegFrameWrapper&   Frame,
 void UFFmpegEncoder::AddFrame(AVFrame* const               Frame,
                               FFmpegEncoderAddFrameResult& Result,
                               FString&                     ErrorMessage) {
+	// helper function to finish with success
+	const auto& Success = [&]() {
+		Result = FFmpegEncoderAddFrameResult::Success;
+	};
+
 	// helper function to finish with failure
 	const auto& Failure = [&](const FString& Message) {
 		ErrorMessage = Message;
@@ -265,6 +275,7 @@ void UFFmpegEncoder::AddFrame(AVFrame* const               Frame,
 
 		// rescale
 		av_packet_rescale_ts(Packet, ContextH264->time_base, Stream->time_base);
+	return Success();
 
 		// write Packet to output media file
 		if (av_interleaved_write_frame(FormatContext, Packet) != 0) {
