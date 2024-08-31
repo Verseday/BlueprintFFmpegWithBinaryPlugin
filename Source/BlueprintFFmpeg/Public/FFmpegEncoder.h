@@ -3,10 +3,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CreateImageFromTextureRHI.h"
 #include "FFmpegEncoderConfig.h"
 #include "FFmpegFrameWrapper.h"
+#include "FFmpegUtils.h"
+#include "LogFFmpegEncoder.h"
 
 #include <atomic>
+#include <concepts>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -117,6 +121,8 @@ public:
 	 */
 	void AddFrame(const FTextureRHIRef&        TextureRHI,
 	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
+	void AddFrame(FTextureRHIRef&&             TextureRHI,
+	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
 
 	/**
 	 * Add a frame. The argument is converted to a YUV420P format image, added as
@@ -124,6 +130,8 @@ public:
 	 * finalized.
 	 */
 	void AddFrame(const FImage& Image, FFmpegEncoderAddFrameResult& Result,
+	              FString& ErrorMessage);
+	void AddFrame(FImage&& Image, FFmpegEncoderAddFrameResult& Result,
 	              FString& ErrorMessage);
 
 	/**
@@ -133,6 +141,8 @@ public:
 	 */
 	void AddFrame(const FFFmpegFrameThreadSafeSharedPtr& Frame,
 	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
+	void AddFrame(FFFmpegFrameThreadSafeSharedPtr&& Frame,
+	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
 
 public:
 	~UFFmpegEncoder();
@@ -141,6 +151,30 @@ public:
 public:
 	virtual uint32 Run() override;
 	virtual void   Stop() override;
+
+	// internal functions for copy/move
+private:
+	template <typename FTextureRHIRef_T>
+	  requires std::is_same_v<const FTextureRHIRef&, FTextureRHIRef_T> ||
+	           std::is_same_v<FTextureRHIRef, FTextureRHIRef_T>
+	void AddFrame_Internal(FTextureRHIRef_T&&           TextureRHI,
+	                       FFmpegEncoderAddFrameResult& Result,
+	                       FString&                     ErrorMessage);
+
+	template <typename FImage_T>
+	  requires std::is_same_v<const FImage&, FImage_T> ||
+	           std::is_same_v<FImage, FImage_T>
+	void AddFrame_Internal(FImage_T&& Image, FFmpegEncoderAddFrameResult& Result,
+	                       FString& ErrorMessage);
+
+	template <typename FFFmpegFrameThreadSafeSharedPtr_T>
+	  requires std::is_same_v<const FFFmpegFrameThreadSafeSharedPtr&,
+	                          FFFmpegFrameThreadSafeSharedPtr_T> ||
+	           std::is_same_v<FFFmpegFrameThreadSafeSharedPtr,
+	                          FFFmpegFrameThreadSafeSharedPtr_T>
+	void AddFrame_Internal(FFFmpegFrameThreadSafeSharedPtr_T&& Image,
+	                       FFmpegEncoderAddFrameResult&        Result,
+	                       FString&                            ErrorMessage);
 
 	// private fields: no data race
 private:
@@ -157,3 +191,63 @@ private:
 	TQueue<FFFmpegFrameThreadSafeSharedPtr, EQueueMode::Spsc> Frames;
 	std::atomic_bool                                          bRunning = true;
 };
+
+template <typename FTextureRHIRef_T>
+  requires std::is_same_v<const FTextureRHIRef&, FTextureRHIRef_T> ||
+           std::is_same_v<FTextureRHIRef, FTextureRHIRef_T>
+void UFFmpegEncoder::AddFrame_Internal(FTextureRHIRef_T&&           TextureRHI,
+                                       FFmpegEncoderAddFrameResult& Result,
+                                       FString& ErrorMessage) {
+	auto Image = CreateImageFromTextureRHI(Forward<FTextureRHIRef_T>(TextureRHI));
+	return AddFrame(MoveTemp(Image), Result, ErrorMessage);
+}
+
+template <typename FImage_T>
+  requires std::is_same_v<const FImage&, FImage_T> ||
+           std::is_same_v<FImage, FImage_T>
+void UFFmpegEncoder::AddFrame_Internal(FImage_T&&                   Image,
+                                       FFmpegEncoderAddFrameResult& Result,
+                                       FString& ErrorMessage) {
+	auto FFmpegFrameWrapper = UFFmpegUtils::CreateFrame(
+	    Forward<FImage_T>(Image), FrameIndex, Config.Width, Config.Height);
+	return AddFrame(MoveTemp(FFmpegFrameWrapper), Result, ErrorMessage);
+}
+
+template <typename FFFmpegFrameThreadSafeSharedPtr_T>
+  requires std::is_same_v<const FFFmpegFrameThreadSafeSharedPtr&,
+                          FFFmpegFrameThreadSafeSharedPtr_T> ||
+           std::is_same_v<FFFmpegFrameThreadSafeSharedPtr,
+                          FFFmpegFrameThreadSafeSharedPtr_T>
+void UFFmpegEncoder::AddFrame_Internal(
+    FFFmpegFrameThreadSafeSharedPtr_T&& Frame,
+    FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage) {
+	// helper function to finish with success
+	const auto& Success = [&]() {
+		Result = FFmpegEncoderAddFrameResult::Success;
+	};
+
+	// helper function to finish with failure
+	const auto& Failure = [&](const FString& Message) {
+		ErrorMessage = Message;
+		UE_LOG(LogFFmpegEncoder, Error, TEXT("%s"), *ErrorMessage);
+		Result = FFmpegEncoderAddFrameResult::Failure;
+	};
+
+	// get Raw frame
+	const auto& RawFrame = Frame.Get();
+
+	// check FrameIndex is correct
+	check(FrameIndex == RawFrame->pts);
+
+	// enqueue frame
+	const auto& SuccessToEnqueue =
+	    Frames.Enqueue(Forward<FFFmpegFrameThreadSafeSharedPtr_T>(Frame));
+	if (!SuccessToEnqueue) {
+		return Failure("Failed to enqueue the frame.");
+	}
+
+	// increment FrameIndex
+	++FrameIndex;
+
+	return Success();
+}

@@ -2,11 +2,8 @@
 
 #include "FFmpegEncoder.h"
 
-#include "CreateImageFromTextureRHI.h"
 #include "Engine/TextureRenderTarget2D.h"
-#include "FFmpegUtils.h"
 #include "ImageUtils.h"
-#include "LogFFmpegEncoder.h"
 
 #include <tuple>
 
@@ -117,53 +114,43 @@ void UFFmpegEncoder::AddFrameFromImagePath(const FString& ImagePath,
 	return AddFrame(MoveTemp(Image), Result, ErrorMessage);
 }
 
-void UFFmpegEncoder::AddFrame(const FTextureRHIRef&        TextureRHI,
+#pragma region AddFrame functions just forward to AddFrame_Internal
+void           UFFmpegEncoder::AddFrame(const FTextureRHIRef&        TextureRHI,
+                                        FFmpegEncoderAddFrameResult& Result,
+                                        FString&                     ErrorMessage) {
+  return AddFrame_Internal(TextureRHI, Result, ErrorMessage);
+}
+
+void UFFmpegEncoder::AddFrame(FTextureRHIRef&&             TextureRHI,
                               FFmpegEncoderAddFrameResult& Result,
                               FString&                     ErrorMessage) {
-	auto Image = CreateImageFromTextureRHI(TextureRHI);
-	return AddFrame(MoveTemp(Image), Result, ErrorMessage);
+	return AddFrame_Internal(MoveTemp(TextureRHI), Result, ErrorMessage);
 }
 
 void UFFmpegEncoder::AddFrame(const FImage&                Image,
                               FFmpegEncoderAddFrameResult& Result,
                               FString&                     ErrorMessage) {
-	auto FFmpegFrameWrapper =
-	    UFFmpegUtils::CreateFrame(Image, FrameIndex, Config.Width, Config.Height);
-	return AddFrame(MoveTemp(FFmpegFrameWrapper), Result, ErrorMessage);
+	return AddFrame_Internal(Image, Result, ErrorMessage);
+}
+
+void UFFmpegEncoder::AddFrame(FImage&&                     Image,
+                              FFmpegEncoderAddFrameResult& Result,
+                              FString&                     ErrorMessage) {
+	return AddFrame_Internal(MoveTemp(Image), Result, ErrorMessage);
 }
 
 void UFFmpegEncoder::AddFrame(const FFFmpegFrameThreadSafeSharedPtr& Frame,
                               FFmpegEncoderAddFrameResult&           Result,
                               FString& ErrorMessage) {
-	// get Raw frame
-	const auto& RawFrame = Frame.Get();
-
-	// helper function to finish with success
-	const auto& Success = [&]() {
-		Result = FFmpegEncoderAddFrameResult::Success;
-	};
-
-	// helper function to finish with failure
-	const auto& Failure = [&](const FString& Message) {
-		ErrorMessage = Message;
-		UE_LOG(LogFFmpegEncoder, Error, TEXT("%s"), *ErrorMessage);
-		Result = FFmpegEncoderAddFrameResult::Failure;
-	};
-
-	// check FrameIndex is correct
-	check(FrameIndex == RawFrame->pts);
-
-	// enqueue frame
-	const auto& SuccessToEnqueue = Frames.Enqueue(Frame);
-	if (!SuccessToEnqueue) {
-		return Failure("Failed to enqueue the frame.");
-	}
-
-	// increment FrameIndex
-	++FrameIndex;
-
-	return Success();
+	return AddFrame_Internal(Frame, Result, ErrorMessage);
 }
+
+void UFFmpegEncoder::AddFrame(FFFmpegFrameThreadSafeSharedPtr&& Frame,
+                              FFmpegEncoderAddFrameResult&      Result,
+                              FString&                          ErrorMessage) {
+	return AddFrame_Internal(MoveTemp(Frame), Result, ErrorMessage);
+}
+#pragma endregion
 
 UFFmpegEncoder::~UFFmpegEncoder() {
 	if (Thread) {
