@@ -7,6 +7,13 @@
 
 #include <tuple>
 
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavcodec/codec.h>
+#include <libavformat/avformat.h>
+#include <libavformat/avio.h>
+}
+
 void UFFmpegEncoder::Open(const FFFmpegEncoderConfig& FFmpegEncoderConfig,
                           const FString&              OutputFilePath,
                           FFmpegEncoderOpenResult&    Result,

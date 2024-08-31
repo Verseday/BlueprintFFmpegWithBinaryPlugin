@@ -10,15 +10,6 @@
 #include "LogFFmpegEncoder.h"
 
 #include <atomic>
-#include <concepts>
-
-extern "C" {
-#include <libavcodec/avcodec.h>
-#include <libavcodec/codec.h>
-#include <libavformat/avformat.h>
-#include <libavformat/avio.h>
-#include <libavutil/frame.h>
-}
 
 #include "FFmpegEncoder.generated.h"
 

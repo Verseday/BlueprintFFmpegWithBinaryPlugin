@@ -3,8 +3,6 @@
 #include "FFmpegUtils.h"
 
 #include "FFmpegEncoder.h"
-#include "FFmpegFrameWrapper.h"
-#include "ImageUtils.h"
 
 void UFFmpegUtils::GenerateVideoFromImageFiles(
     const FString& OutputFilePath, const TArray<FString>& InputImagePaths,
