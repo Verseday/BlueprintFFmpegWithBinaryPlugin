@@ -301,8 +301,8 @@ uint32 UFFmpegEncoder::Run() {
 	while (bRunning || !Frames.IsEmpty()) {
 		// if Frames queue is empty
 		if (Frames.IsEmpty()) {
-			// sleep for a little while
-			FPlatformProcess::Sleep(1);
+			// sleep for 10/FPS seconds
+			FPlatformProcess::Sleep(10.0f / FrameRate);
 
 			// loop again
 			continue;
