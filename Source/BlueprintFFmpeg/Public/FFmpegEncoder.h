@@ -63,6 +63,12 @@ UCLASS(Blueprintable, BlueprintType)
 class BLUEPRINTFFMPEG_API UFFmpegEncoder: public UObject, public FRunnable {
 	GENERATED_BODY()
 
+	// type aliases
+public:
+	using TTask_Frame = UE::Tasks::TTask<FFFmpegFrameThreadSafeSharedPtr>;
+	using TTask_Image = UE::Tasks::TTask<FImage>;
+
+	// blueprint functions
 public:
 	/**
 	 * Initialize and put into encoding standby status.
@@ -104,6 +110,7 @@ public:
 	                           FFmpegEncoderAddFrameResult& Result,
 	                           FString&                     ErrorMessage);
 
+	// C++ functions
 public:
 	/**
 	 * Add a frame. The argument is converted to a YUV420P format image, added as
@@ -111,8 +118,8 @@ public:
 	 * finalized.
 	 */
 	template <typename FTextureRHIRef_T>
-	  requires std::is_same_v<const FTextureRHIRef&, FTextureRHIRef_T> ||
-	           std::is_same_v<FTextureRHIRef, FTextureRHIRef_T>
+	  requires std::is_same_v<FTextureRHIRef,
+	                          std::remove_cvref_t<FTextureRHIRef_T>>
 	void AddFrame(FTextureRHIRef_T&&           TextureRHI,
 	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
 
@@ -121,23 +128,19 @@ public:
 	 * a frame, and appended to the file immediately after the frame data is
 	 * finalized.
 	 */
-	template <typename FImage_T>
-	  requires std::is_same_v<const FImage&, FImage_T> ||
-	           std::is_same_v<FImage, FImage_T>
-	void AddFrame(FImage_T&& Image, FFmpegEncoderAddFrameResult& Result,
-	              FString& ErrorMessage);
+	void AddFrame(const TTask_Image&           ImageTask,
+	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
 
 	/**
 	 * Add a frame. The argument is converted to a YUV420P format image, added as
 	 * a frame, and appended to the file immediately after the frame data is
 	 * finalized.
 	 */
-	template <typename FFFmpegFrameThreadSafeSharedPtr_T>
-	  requires std::is_same_v<const FFFmpegFrameThreadSafeSharedPtr&,
-	                          FFFmpegFrameThreadSafeSharedPtr_T> ||
-	           std::is_same_v<FFFmpegFrameThreadSafeSharedPtr,
-	                          FFFmpegFrameThreadSafeSharedPtr_T>
-	void AddFrame(FFFmpegFrameThreadSafeSharedPtr_T&& Image,
+	template <typename TTaskFFFmpegFrameThreadSafeSharedPtr_T>
+	  requires std::is_same_v<
+	      UFFmpegEncoder::TTask_Frame,
+	      std::remove_cvref_t<TTaskFFFmpegFrameThreadSafeSharedPtr_T>>
+	void AddFrame(TTaskFFFmpegFrameThreadSafeSharedPtr_T&& Frame,
 	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
 
 public:
@@ -167,13 +170,13 @@ private:
 	// private fields: beware of data race
 private:
 	// single-producer, single-consumer
-	TQueue<FFFmpegFrameThreadSafeSharedPtr, EQueueMode::Spsc> Frames;
-	std::atomic_bool                                          bRunning = true;
+	TQueue<TTask_Frame, EQueueMode::Spsc> FrameTasks;
+	std::atomic_bool                      bRunning = true;
 };
 
+#pragma region definition of template functions
 template <typename FTextureRHIRef_T>
-  requires std::is_same_v<const FTextureRHIRef&, FTextureRHIRef_T> ||
-           std::is_same_v<FTextureRHIRef, FTextureRHIRef_T>
+  requires std::is_same_v<FTextureRHIRef, std::remove_cvref_t<FTextureRHIRef_T>>
 void UFFmpegEncoder::AddFrame(FTextureRHIRef_T&&           TextureRHI,
                               FFmpegEncoderAddFrameResult& Result,
                               FString&                     ErrorMessage) {
@@ -183,34 +186,19 @@ void UFFmpegEncoder::AddFrame(FTextureRHIRef_T&&           TextureRHI,
 	// and Close function must not be called.
 	checkf(!bClosed, checkfMesClosed_AddFrame);
 
-	auto Image = CreateImageFromTextureRHI(Forward<FTextureRHIRef_T>(TextureRHI));
-	return AddFrame(MoveTemp(Image), Result, ErrorMessage);
+	// launch task to create image
+	auto ImageTask =
+	    CreateImageFromTextureRHIAsync(Forward<FTextureRHIRef_T>(TextureRHI));
+
+	return AddFrame(MoveTemp(ImageTask), Result, ErrorMessage);
 }
 
-template <typename FImage_T>
-  requires std::is_same_v<const FImage&, FImage_T> ||
-           std::is_same_v<FImage, FImage_T>
-void UFFmpegEncoder::AddFrame(FImage_T&&                   Image,
-                              FFmpegEncoderAddFrameResult& Result,
-                              FString&                     ErrorMessage) {
-	// Open function must be called
-	checkf(bOpened, checkfMesNotOpened_AddFrame);
-
-	// and Close function must not be called.
-	checkf(!bClosed, checkfMesClosed_AddFrame);
-
-	auto FFmpegFrameWrapper = UFFmpegUtils::CreateFrame(
-	    Forward<FImage_T>(Image), FrameIndex, Config.Width, Config.Height);
-	return AddFrame(MoveTemp(FFmpegFrameWrapper), Result, ErrorMessage);
-}
-
-template <typename FFFmpegFrameThreadSafeSharedPtr_T>
-  requires std::is_same_v<const FFFmpegFrameThreadSafeSharedPtr&,
-                          FFFmpegFrameThreadSafeSharedPtr_T> ||
-           std::is_same_v<FFFmpegFrameThreadSafeSharedPtr,
-                          FFFmpegFrameThreadSafeSharedPtr_T>
-void UFFmpegEncoder::AddFrame(FFFmpegFrameThreadSafeSharedPtr_T&& Frame,
-                              FFmpegEncoderAddFrameResult&        Result,
+template <typename TTaskFFFmpegFrameThreadSafeSharedPtr_T>
+  requires std::is_same_v<
+      UFFmpegEncoder::TTask_Frame,
+      std::remove_cvref_t<TTaskFFFmpegFrameThreadSafeSharedPtr_T>>
+void UFFmpegEncoder::AddFrame(TTaskFFFmpegFrameThreadSafeSharedPtr_T&& Frame,
+                              FFmpegEncoderAddFrameResult&             Result,
                               FString& ErrorMessage) {
 	// Open function must be called
 	checkf(bOpened, checkfMesNotOpened_AddFrame);
@@ -230,15 +218,11 @@ void UFFmpegEncoder::AddFrame(FFFmpegFrameThreadSafeSharedPtr_T&& Frame,
 		Result = FFmpegEncoderAddFrameResult::Failure;
 	};
 
-	// get Raw frame
-	const auto& RawFrame = Frame.Get();
-
-	// check FrameIndex is correct
-	check(FrameIndex == RawFrame->pts);
-
 	// enqueue frame
-	const auto& SuccessToEnqueue =
-	    Frames.Enqueue(Forward<FFFmpegFrameThreadSafeSharedPtr_T>(Frame));
+	const auto& SuccessToEnqueue = FrameTasks.Enqueue(
+	    Forward<TTaskFFFmpegFrameThreadSafeSharedPtr_T>(Frame));
+
+	// if failed to enqueue
 	if (!SuccessToEnqueue) {
 		return Failure("Failed to enqueue the frame.");
 	}
@@ -248,3 +232,4 @@ void UFFmpegEncoder::AddFrame(FFFmpegFrameThreadSafeSharedPtr_T&& Frame,
 
 	return Success();
 }
+#pragma endregion

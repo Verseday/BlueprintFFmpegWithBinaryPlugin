@@ -4,6 +4,7 @@
 
 #include "Engine/TextureRenderTarget2D.h"
 #include "ImageUtils.h"
+#include "Tasks/Task.h"
 
 #include <tuple>
 
@@ -130,8 +131,33 @@ void UFFmpegEncoder::AddFrameFromImagePath(const FString& ImagePath,
 		return Failure("Failed to load image.");
 	}
 
+	// make a task that just returns that Image
+	auto ImageTask = UE::Tasks::MakeCompletedTask<FImage>(MoveTemp(Image));
+
 	// Add Frame from Image
-	return AddFrame(MoveTemp(Image), Result, ErrorMessage);
+	return AddFrame(MoveTemp(ImageTask), Result, ErrorMessage);
+}
+
+void UFFmpegEncoder::AddFrame(const TTask_Image&           ImageTask,
+                              FFmpegEncoderAddFrameResult& Result,
+                              FString&                     ErrorMessage) {
+	// Open function must be called
+	checkf(bOpened, checkfMesNotOpened_AddFrame);
+
+	// and Close function must not be called.
+	checkf(!bClosed, checkfMesClosed_AddFrame);
+
+	// launch CreateFrame task
+	auto FrameTask = UE::Tasks::Launch(
+	    UE_SOURCE_LOCATION,
+	    [&, ImageTask = ImageTask, FrameIndex = FrameIndex, Width = Config.Width,
+	     Height = Config.Height]() mutable {
+		    return UFFmpegUtils::CreateFrame(MoveTemp(ImageTask).GetResult(),
+		                                     FrameIndex, Width, Height);
+	    },
+	    ImageTask, LowLevelTasks::ETaskPriority::BackgroundNormal);
+
+	return AddFrame(MoveTemp(FrameTask), Result, ErrorMessage);
 }
 
 UFFmpegEncoder::~UFFmpegEncoder() {
@@ -263,13 +289,10 @@ uint32 UFFmpegEncoder::Run() {
 		return Success;
 	};
 
-	// Pause encode thread until Stop or AddFrame is called
-	//	TryPauseEncodeThread();
-
-	// Loop while the status is in running or Frames is not empty.
-	while (bRunning || !Frames.IsEmpty()) {
-		// if Frames queue is empty
-		if (Frames.IsEmpty()) {
+	// Loop while the status is in running or FrameTasks is not empty.
+	while (bRunning || !FrameTasks.IsEmpty()) {
+		// if FrameTasks queue is empty
+		if (FrameTasks.IsEmpty()) {
 			// sleep for 10/FPS seconds
 			FPlatformProcess::Sleep(10.0f / FrameRate);
 
@@ -277,9 +300,12 @@ uint32 UFFmpegEncoder::Run() {
 			continue;
 		}
 
-		// get a frame pending encoding frame
-		FFFmpegFrameThreadSafeSharedPtr Frame;
-		Frames.Dequeue(Frame);
+		// dequeue next frame task
+		TTask_Frame FrameTask;
+		FrameTasks.Dequeue(FrameTask);
+
+		// get a frame pending encoding
+		const auto& Frame = FrameTask.GetResult();
 
 		// send a frame
 		if (avcodec_send_frame(ContextH264, Frame.Get()) != 0) {
