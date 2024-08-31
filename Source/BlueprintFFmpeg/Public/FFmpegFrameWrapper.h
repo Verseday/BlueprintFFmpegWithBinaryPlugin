@@ -13,7 +13,7 @@ extern "C" {
  * Threadsafe.
  */
 template <ESPMode InMode>
-struct FFMPEGBLUEPRINT_API TFFmpegFrameSharedPtr {
+struct BLUEPRINTFFMPEG_API TFFmpegFrameSharedPtr {
 public:
 	AVFrame* Get() const;
 

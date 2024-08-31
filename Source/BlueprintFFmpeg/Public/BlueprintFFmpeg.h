@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
-class FFFmpegBlueprintModule : public IModuleInterface
+class FBlueprintFFmpegModule : public IModuleInterface
 {
 public:
 

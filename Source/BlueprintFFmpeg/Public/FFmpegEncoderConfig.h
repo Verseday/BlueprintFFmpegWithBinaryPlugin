@@ -10,7 +10,7 @@
  * Structure for FFmpegEncoder settings
  */
 USTRUCT(BlueprintType)
-struct FFMPEGBLUEPRINT_API FFFmpegEncoderConfig {
+struct BLUEPRINTFFMPEG_API FFFmpegEncoderConfig {
 	GENERATED_BODY()
 
 	/**

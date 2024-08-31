@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class FFmpegBlueprint : ModuleRules
+public class BlueprintFFmpeg : ModuleRules
 {
-    public FFmpegBlueprint(ReadOnlyTargetRules Target) : base(Target)
+    public BlueprintFFmpeg(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 

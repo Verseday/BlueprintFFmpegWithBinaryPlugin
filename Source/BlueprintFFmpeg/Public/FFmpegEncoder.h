@@ -65,7 +65,7 @@ enum class FFmpegEncoderThreadResult {
  * then the video is output to the OutputFilePath specified in Open function.
  */
 UCLASS(Blueprintable, BlueprintType)
-class FFMPEGBLUEPRINT_API UFFmpegEncoder: public UObject, public FRunnable {
+class BLUEPRINTFFMPEG_API UFFmpegEncoder: public UObject, public FRunnable {
 	GENERATED_BODY()
 
 public:

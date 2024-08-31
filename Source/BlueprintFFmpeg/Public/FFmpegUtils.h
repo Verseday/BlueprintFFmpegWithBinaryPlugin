@@ -20,7 +20,7 @@ extern "C" {
  *
  */
 UCLASS()
-class FFMPEGBLUEPRINT_API UFFmpegUtils: public UBlueprintFunctionLibrary {
+class BLUEPRINTFFMPEG_API UFFmpegUtils: public UBlueprintFunctionLibrary {
 	GENERATED_BODY()
 
 public:
@@ -111,7 +111,7 @@ TFFmpegFrameSharedPtr<InMode> UFFmpegUtils::CreateFrame(
 	RawFrame->width  = FrameWidth.value_or(SrcWidth);
 	RawFrame->height = FrameHeight.value_or(SrcHeight);
 
-	// ƒtƒŒ[ƒ€‚Ìƒoƒbƒtƒ@‚ğ‰Šú‰»
+	// ï¿½tï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½Ìƒoï¿½bï¿½tï¿½@ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 	if (av_frame_get_buffer(RawFrame, 0) < 0) {
 		UE_LOG(LogTemp, Error, TEXT("Failed to allocate AVFrame buffer"));
 		return FFmpegFrame;
