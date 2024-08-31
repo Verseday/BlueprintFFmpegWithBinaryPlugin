@@ -111,7 +111,7 @@ TFFmpegFrameSharedPtr<InMode> UFFmpegUtils::CreateFrame(
 	RawFrame->width  = FrameWidth.value_or(SrcWidth);
 	RawFrame->height = FrameHeight.value_or(SrcHeight);
 
-	// �t���[���̃o�b�t�@��������
+	// initialize frame buffer
 	if (av_frame_get_buffer(RawFrame, 0) < 0) {
 		UE_LOG(LogTemp, Error, TEXT("Failed to allocate AVFrame buffer"));
 		return FFmpegFrame;
