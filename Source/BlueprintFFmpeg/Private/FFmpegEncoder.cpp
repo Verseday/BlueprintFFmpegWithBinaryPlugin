@@ -88,7 +88,7 @@ void UFFmpegEncoder::AddFrameFromRenderTarget(
 		return Failure("RHITexture is nullptr");
 	}
 
-	return AddFrame(RHITexture, Result, ErrorMessage);
+	return AddFrame(FTextureRHIRef(RHITexture), Result, ErrorMessage);
 }
 
 void UFFmpegEncoder::AddFrameFromImagePath(const FString& ImagePath,
@@ -113,44 +113,6 @@ void UFFmpegEncoder::AddFrameFromImagePath(const FString& ImagePath,
 	// Add Frame from Image
 	return AddFrame(MoveTemp(Image), Result, ErrorMessage);
 }
-
-#pragma region AddFrame functions just forward to AddFrame_Internal
-void           UFFmpegEncoder::AddFrame(const FTextureRHIRef&        TextureRHI,
-                                        FFmpegEncoderAddFrameResult& Result,
-                                        FString&                     ErrorMessage) {
-  return AddFrame_Internal(TextureRHI, Result, ErrorMessage);
-}
-
-void UFFmpegEncoder::AddFrame(FTextureRHIRef&&             TextureRHI,
-                              FFmpegEncoderAddFrameResult& Result,
-                              FString&                     ErrorMessage) {
-	return AddFrame_Internal(MoveTemp(TextureRHI), Result, ErrorMessage);
-}
-
-void UFFmpegEncoder::AddFrame(const FImage&                Image,
-                              FFmpegEncoderAddFrameResult& Result,
-                              FString&                     ErrorMessage) {
-	return AddFrame_Internal(Image, Result, ErrorMessage);
-}
-
-void UFFmpegEncoder::AddFrame(FImage&&                     Image,
-                              FFmpegEncoderAddFrameResult& Result,
-                              FString&                     ErrorMessage) {
-	return AddFrame_Internal(MoveTemp(Image), Result, ErrorMessage);
-}
-
-void UFFmpegEncoder::AddFrame(const FFFmpegFrameThreadSafeSharedPtr& Frame,
-                              FFmpegEncoderAddFrameResult&           Result,
-                              FString& ErrorMessage) {
-	return AddFrame_Internal(Frame, Result, ErrorMessage);
-}
-
-void UFFmpegEncoder::AddFrame(FFFmpegFrameThreadSafeSharedPtr&& Frame,
-                              FFmpegEncoderAddFrameResult&      Result,
-                              FString&                          ErrorMessage) {
-	return AddFrame_Internal(MoveTemp(Frame), Result, ErrorMessage);
-}
-#pragma endregion
 
 UFFmpegEncoder::~UFFmpegEncoder() {
 	if (Thread) {

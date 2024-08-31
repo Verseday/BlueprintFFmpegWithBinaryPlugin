@@ -119,9 +119,10 @@ public:
 	 * a frame, and appended to the file immediately after the frame data is
 	 * finalized.
 	 */
-	void AddFrame(const FTextureRHIRef&        TextureRHI,
-	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
-	void AddFrame(FTextureRHIRef&&             TextureRHI,
+	template <typename FTextureRHIRef_T>
+	  requires std::is_same_v<const FTextureRHIRef&, FTextureRHIRef_T> ||
+	           std::is_same_v<FTextureRHIRef, FTextureRHIRef_T>
+	void AddFrame(FTextureRHIRef_T&&           TextureRHI,
 	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
 
 	/**
@@ -129,9 +130,10 @@ public:
 	 * a frame, and appended to the file immediately after the frame data is
 	 * finalized.
 	 */
-	void AddFrame(const FImage& Image, FFmpegEncoderAddFrameResult& Result,
-	              FString& ErrorMessage);
-	void AddFrame(FImage&& Image, FFmpegEncoderAddFrameResult& Result,
+	template <typename FImage_T>
+	  requires std::is_same_v<const FImage&, FImage_T> ||
+	           std::is_same_v<FImage, FImage_T>
+	void AddFrame(FImage_T&& Image, FFmpegEncoderAddFrameResult& Result,
 	              FString& ErrorMessage);
 
 	/**
@@ -139,9 +141,12 @@ public:
 	 * a frame, and appended to the file immediately after the frame data is
 	 * finalized.
 	 */
-	void AddFrame(const FFFmpegFrameThreadSafeSharedPtr& Frame,
-	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
-	void AddFrame(FFFmpegFrameThreadSafeSharedPtr&& Frame,
+	template <typename FFFmpegFrameThreadSafeSharedPtr_T>
+	  requires std::is_same_v<const FFFmpegFrameThreadSafeSharedPtr&,
+	                          FFFmpegFrameThreadSafeSharedPtr_T> ||
+	           std::is_same_v<FFFmpegFrameThreadSafeSharedPtr,
+	                          FFFmpegFrameThreadSafeSharedPtr_T>
+	void AddFrame(FFFmpegFrameThreadSafeSharedPtr_T&& Image,
 	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
 
 public:
@@ -151,30 +156,6 @@ public:
 public:
 	virtual uint32 Run() override;
 	virtual void   Stop() override;
-
-	// internal functions for copy/move
-private:
-	template <typename FTextureRHIRef_T>
-	  requires std::is_same_v<const FTextureRHIRef&, FTextureRHIRef_T> ||
-	           std::is_same_v<FTextureRHIRef, FTextureRHIRef_T>
-	void AddFrame_Internal(FTextureRHIRef_T&&           TextureRHI,
-	                       FFmpegEncoderAddFrameResult& Result,
-	                       FString&                     ErrorMessage);
-
-	template <typename FImage_T>
-	  requires std::is_same_v<const FImage&, FImage_T> ||
-	           std::is_same_v<FImage, FImage_T>
-	void AddFrame_Internal(FImage_T&& Image, FFmpegEncoderAddFrameResult& Result,
-	                       FString& ErrorMessage);
-
-	template <typename FFFmpegFrameThreadSafeSharedPtr_T>
-	  requires std::is_same_v<const FFFmpegFrameThreadSafeSharedPtr&,
-	                          FFFmpegFrameThreadSafeSharedPtr_T> ||
-	           std::is_same_v<FFFmpegFrameThreadSafeSharedPtr,
-	                          FFFmpegFrameThreadSafeSharedPtr_T>
-	void AddFrame_Internal(FFFmpegFrameThreadSafeSharedPtr_T&& Image,
-	                       FFmpegEncoderAddFrameResult&        Result,
-	                       FString&                            ErrorMessage);
 
 	// private fields: no data race
 private:
@@ -195,9 +176,9 @@ private:
 template <typename FTextureRHIRef_T>
   requires std::is_same_v<const FTextureRHIRef&, FTextureRHIRef_T> ||
            std::is_same_v<FTextureRHIRef, FTextureRHIRef_T>
-void UFFmpegEncoder::AddFrame_Internal(FTextureRHIRef_T&&           TextureRHI,
-                                       FFmpegEncoderAddFrameResult& Result,
-                                       FString& ErrorMessage) {
+void UFFmpegEncoder::AddFrame(FTextureRHIRef_T&&           TextureRHI,
+                              FFmpegEncoderAddFrameResult& Result,
+                              FString&                     ErrorMessage) {
 	auto Image = CreateImageFromTextureRHI(Forward<FTextureRHIRef_T>(TextureRHI));
 	return AddFrame(MoveTemp(Image), Result, ErrorMessage);
 }
@@ -205,9 +186,9 @@ void UFFmpegEncoder::AddFrame_Internal(FTextureRHIRef_T&&           TextureRHI,
 template <typename FImage_T>
   requires std::is_same_v<const FImage&, FImage_T> ||
            std::is_same_v<FImage, FImage_T>
-void UFFmpegEncoder::AddFrame_Internal(FImage_T&&                   Image,
-                                       FFmpegEncoderAddFrameResult& Result,
-                                       FString& ErrorMessage) {
+void UFFmpegEncoder::AddFrame(FImage_T&&                   Image,
+                              FFmpegEncoderAddFrameResult& Result,
+                              FString&                     ErrorMessage) {
 	auto FFmpegFrameWrapper = UFFmpegUtils::CreateFrame(
 	    Forward<FImage_T>(Image), FrameIndex, Config.Width, Config.Height);
 	return AddFrame(MoveTemp(FFmpegFrameWrapper), Result, ErrorMessage);
@@ -218,9 +199,9 @@ template <typename FFFmpegFrameThreadSafeSharedPtr_T>
                           FFFmpegFrameThreadSafeSharedPtr_T> ||
            std::is_same_v<FFFmpegFrameThreadSafeSharedPtr,
                           FFFmpegFrameThreadSafeSharedPtr_T>
-void UFFmpegEncoder::AddFrame_Internal(
-    FFFmpegFrameThreadSafeSharedPtr_T&& Frame,
-    FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage) {
+void UFFmpegEncoder::AddFrame(FFFmpegFrameThreadSafeSharedPtr_T&& Frame,
+                              FFmpegEncoderAddFrameResult&        Result,
+                              FString& ErrorMessage) {
 	// helper function to finish with success
 	const auto& Success = [&]() {
 		Result = FFmpegEncoderAddFrameResult::Success;
