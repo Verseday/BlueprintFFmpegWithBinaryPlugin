@@ -3,12 +3,16 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "FFmpegFrameWrapper.h"
+#include "ImageUtils.h"
+
+#include <ImageCore.h>
+#include <optional>
 
 extern "C" {
 #include <libavutil/frame.h>
+#include <libswscale/swscale.h>
 }
-
-#include <ImageCore.h>
 
 #include "FFmpegUtils.generated.h"
 
@@ -28,6 +32,18 @@ public:
 public:
 	static constexpr AVPixelFormat
 	    FFmpegFrameFormatOf(ERawImageFormat::Type UEImageFormat) noexcept;
+
+	template <ESPMode InMode = ESPMode::ThreadSafe>
+	static TFFmpegFrameSharedPtr<InMode> CreateFrame(
+	    const FString& ImagePath, int FrameIndex,
+	    std::optional<int> FrameWidth = {}, std::optional<int> FrameHeight = {},
+	    AVPixelFormat PixelFormat = AVPixelFormat::AV_PIX_FMT_YUV420P);
+
+	template <ESPMode InMode = ESPMode::ThreadSafe>
+	static TFFmpegFrameSharedPtr<InMode> CreateFrame(
+	    const FImage& Image, int FrameIndex, std::optional<int> FrameWidth = {},
+	    std::optional<int> FrameHeight = {},
+	    AVPixelFormat      PixelFormat = AVPixelFormat::AV_PIX_FMT_YUV420P);
 };
 
 #pragma region          definition of inline functions
@@ -65,5 +81,67 @@ constexpr AVPixelFormat UFFmpegUtils::FFmpegFrameFormatOf(
 	default:
 		return AV_PIX_FMT_NONE; // Fallback for unspecified formats
 	}
+}
+
+template <ESPMode InMode>
+TFFmpegFrameSharedPtr<InMode>
+    UFFmpegUtils::CreateFrame(const FString& ImagePath, const int FrameIndex,
+                              std::optional<int> FrameWidth,
+                              std::optional<int> FrameHeight,
+                              AVPixelFormat      PixelFormat) {
+	FImage Image;
+	FImageUtils::LoadImage(*ImagePath, Image);
+	return CreateFrame(Image, FrameIndex, FrameWidth, FrameHeight, PixelFormat);
+}
+
+template <ESPMode InMode>
+TFFmpegFrameSharedPtr<InMode> UFFmpegUtils::CreateFrame(
+    const FImage& Image, const int FrameIndex, std::optional<int> FrameWidth,
+    std::optional<int> FrameHeight, AVPixelFormat PixelFormat) {
+	TFFmpegFrameSharedPtr<InMode> FFmpegFrame;
+
+	const auto& SrcFormat = UFFmpegUtils::FFmpegFrameFormatOf(Image.Format);
+	const auto& SrcWidth  = Image.GetWidth();
+	const auto& SrcHeight = Image.GetHeight();
+
+	const auto& RawFrame = FFmpegFrame.Get();
+
+	RawFrame->pts    = FrameIndex;
+	RawFrame->format = PixelFormat;
+	RawFrame->width  = FrameWidth.value_or(SrcWidth);
+	RawFrame->height = FrameHeight.value_or(SrcHeight);
+
+	// フレームのバッファを初期化
+	if (av_frame_get_buffer(RawFrame, 0) < 0) {
+		UE_LOG(LogTemp, Error, TEXT("Failed to allocate AVFrame buffer"));
+		return FFmpegFrame;
+	}
+
+	SwsContext* SwsConvertFormatContext =
+	    sws_getContext(SrcWidth, SrcHeight, SrcFormat, SrcWidth, SrcHeight,
+	                   PixelFormat, SWS_BILINEAR, nullptr, nullptr, nullptr);
+	if (nullptr == SwsConvertFormatContext) {
+		UE_LOG(LogTemp, Error, TEXT("Failed to create SwsContext."));
+		return FFmpegFrame;
+	}
+
+	const auto&    RawImageData  = Image.RawData;
+	const auto&    BytesPerPixel = Image.GetBytesPerPixel();
+	const auto&    DestImageData = RawFrame->data[0];
+	const uint8_t* SrcData[8]    = {RawImageData.GetData(),
+	                                nullptr,
+	                                nullptr,
+	                                nullptr,
+	                                nullptr,
+	                                nullptr,
+	                                nullptr,
+	                                nullptr};
+	const int SrcLineSize[8] = {SrcWidth * BytesPerPixel, 0, 0, 0, 0, 0, 0, 0};
+	sws_scale(SwsConvertFormatContext, SrcData, SrcLineSize, 0, SrcHeight,
+	          RawFrame->data, RawFrame->linesize);
+
+	sws_freeContext(SwsConvertFormatContext);
+
+	return FFmpegFrame;
 }
 #pragma endregion

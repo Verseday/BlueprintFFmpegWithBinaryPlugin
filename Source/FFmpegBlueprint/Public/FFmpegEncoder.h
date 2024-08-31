@@ -6,6 +6,8 @@
 #include "FFmpegEncoderConfig.h"
 #include "FFmpegFrameWrapper.h"
 
+#include <atomic>
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavcodec/codec.h>
@@ -34,6 +36,25 @@ enum class FFmpegEncoderCloseResult : uint8 { Success, Failure };
 UENUM(BlueprintType)
 enum class FFmpegEncoderAddFrameResult : uint8 { Success, Failure };
 
+enum class FFmpegEncoderThreadResult {
+	Success = 0,
+	CodecH264IsNotFound,
+	FailedToAllocateCodecContext,
+	FailedToInitializeCodecContext,
+	FailedToInitializeIOContext,
+	FailedToAllocateFormatContext,
+	FailedToAddANewStream,
+	FailedToSetCodecParameters,
+	FailedToWriteHeader,
+
+	FailedToSendFrame,
+	FailedToAllocatePacket,
+	FailedToWritePacket,
+
+	FailedToFlushSendFrame,
+	FailedToWriteTrailer
+};
+
 /**
  * A video encoder that uses FFmpeg and can be used from blueprint.
  * How to use:
@@ -44,7 +65,7 @@ enum class FFmpegEncoderAddFrameResult : uint8 { Success, Failure };
  * then the video is output to the OutputFilePath specified in Open function.
  */
 UCLASS(Blueprintable, BlueprintType)
-class FFMPEGBLUEPRINT_API UFFmpegEncoder: public UObject {
+class FFMPEGBLUEPRINT_API UFFmpegEncoder: public UObject, public FRunnable {
 	GENERATED_BODY()
 
 public:
@@ -65,8 +86,8 @@ public:
 	 * Terminate encoding. The encoding result is output to the file specified by
 	 * OutputFilePath of the Open function.
 	 */
-	UFUNCTION(BlueprintCallable, meta = (ExpandEnumAsExecs = "Result"))
-	void Close(FFmpegEncoderCloseResult& Result, FString& ErrorMesage);
+	UFUNCTION(BlueprintCallable)
+	void Close();
 
 	/**
 	 * Add a frame. The argument is converted to a YUV420P format image, added as
@@ -110,26 +131,29 @@ public:
 	 * a frame, and appended to the file immediately after the frame data is
 	 * finalized.
 	 */
-	void AddFrame(const FFFmpegFrameWrapper&   Frame,
+	void AddFrame(const FFFmpegFrameThreadSafeSharedPtr& Frame,
 	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
 
-	/**
-	 * Add a frame. The argument is converted to a YUV420P format image, added as
-	 * a frame, and appended to the file immediately after the frame data is
-	 * finalized.
-	 * @note   All other AddFrame functions will eventually call this
-	 *         AddFrame function.
-	 */
-	void AddFrame(AVFrame* Frame, FFmpegEncoderAddFrameResult& Result,
-	              FString& ErrorMessage);
+public:
+	~UFFmpegEncoder();
 
-	// private fields
+	// FRunnable interfaces
+public:
+	virtual uint32 Run() override;
+	virtual void   Stop() override;
+
+	// private fields: no data race
 private:
-	const AVCodec*       CodecH264     = nullptr;
-	AVCodecContext*      ContextH264   = nullptr;
-	AVFormatContext*     FormatContext = nullptr;
-	AVStream*            Stream        = nullptr;
-	AVIOContext*         IOContext     = nullptr;
-	int                  FrameIndex    = 0;
+	bool                 bOpened = false;
+	bool                 bClosed = false;
 	FFFmpegEncoderConfig Config;
+	FString              VideoPath;
+	int64_t              FrameIndex = 0;
+	FRunnableThread*     Thread     = nullptr;
+
+	// private fields: beware of data race
+private:
+	// single-producer, single-consumer
+	TQueue<FFFmpegFrameThreadSafeSharedPtr, EQueueMode::Spsc> Frames;
+	std::atomic_bool                                          bRunning = true;
 };

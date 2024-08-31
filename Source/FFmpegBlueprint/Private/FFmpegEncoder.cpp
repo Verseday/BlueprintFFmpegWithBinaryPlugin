@@ -4,6 +4,7 @@
 
 #include "CreateImageFromTextureRHI.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "FFmpegUtils.h"
 #include "ImageUtils.h"
 #include "LogFFmpegEncoder.h"
 
@@ -25,140 +26,37 @@ void UFFmpegEncoder::Open(const FFFmpegEncoderConfig& FFmpegEncoderConfig,
 		Result = FFmpegEncoderOpenResult::Failure;
 	};
 
+	// Open function must be called only once.
+	check(!bOpened);
+
+	// Mark as opened
+	bOpened = true;
+
 	// copy Config
 	Config = FFmpegEncoderConfig;
 
-	// get Codec
-	CodecH264 = avcodec_find_encoder(AV_CODEC_ID_H264);
-	if (nullptr == CodecH264) {
-		return Failure("Codec H264 was not found.");
-	}
+	// copy OutputFilePath
+	VideoPath = OutputFilePath;
 
-	// get Codec Context
-	ContextH264 = avcodec_alloc_context3(CodecH264);
-	if (nullptr == ContextH264) {
-		return Failure("Failed to allocate codec context.");
-	}
-
-	// get from Config
-	const auto& [Width, Height, FrameRate, BitRate] =
-	    std::tie(Config.Width, Config.Height, Config.FrameRate, Config.BitRate);
-
-	// FrameRate as Rational
-	const auto FrameRateAsRational = av_d2q(FrameRate, INT_MAX);
-
-	// set Codec Context settings
-	ContextH264->width     = Width;
-	ContextH264->height    = Height;
-	ContextH264->bit_rate  = BitRate;
-	ContextH264->time_base = av_inv_q(FrameRateAsRational);
-	ContextH264->framerate = FrameRateAsRational;
-
-	ContextH264->gop_size     = 300;
-	ContextH264->max_b_frames = 12;
-	ContextH264->pix_fmt      = AV_PIX_FMT_YUV420P;
-
-	// set CRF quality value
-	AVDictionary* EncodeOptions = nullptr;
-	av_dict_set(&EncodeOptions, "crf", "18", 0);
-	if (avcodec_open2(ContextH264, CodecH264, &EncodeOptions) != 0) {
-		return Failure("Failed to initialize codec context to use the h264 codec.");
-	}
-	av_dict_free(&EncodeOptions);
-
-	// open output file
-	auto OutputFilePathInUTF8 = StringCast<UTF8CHAR>(*OutputFilePath);
-	IOContext                 = nullptr;
-	if (avio_open(&IOContext,
-	              reinterpret_cast<const char*>(OutputFilePathInUTF8.Get()),
-	              AVIO_FLAG_WRITE) < 0) {
-		return Failure(FString::Printf(
-		    TEXT("Failed to initialize io context and open file: %s."),
-		    *OutputFilePath));
-	}
-
-	// allocate memory to FormatContext
-	if (avformat_alloc_output_context2(
-	        &FormatContext, nullptr, nullptr,
-	        reinterpret_cast<const char*>(OutputFilePathInUTF8.Get())) < 0) {
-		return Failure("Failed to allocate format context.");
-	}
-
-	// set FormatContext to output to specified output file
-	FormatContext->pb = IOContext;
-
-	// add new stream to file
-	Stream = avformat_new_stream(FormatContext, CodecH264);
-	if (nullptr == Stream) {
-		return Failure("Failed to add a new stream.");
-	}
-
-	// set Stream information
-	Stream->sample_aspect_ratio = ContextH264->sample_aspect_ratio;
-	Stream->time_base           = ContextH264->time_base;
-
-	// set parameter from codec context h264
-	if (avcodec_parameters_from_context(Stream->codecpar, ContextH264) != 0) {
-		return Failure("Failed to set parameters.");
-	}
-
-	// write header to output file
-	if (avformat_write_header(FormatContext, nullptr) != 0) {
-		return Failure(
-		    "Failed to write the stream header to the output media file.");
+	// create encode thread
+	Thread = FRunnableThread::Create(this, TEXT("FFmpeg encode thread"));
+	if (nullptr == Thread) {
+		return Failure("Failed to create encode thread.");
 	}
 
 	// finish as success
 	return Success();
 }
 
-void UFFmpegEncoder::Close(FFmpegEncoderCloseResult& Result,
-                           FString&                  ErrorMessage) {
-	// helper function to finish with failure
-	const auto& Failure = [&](const FString& Message) {
-		ErrorMessage = Message;
-		UE_LOG(LogFFmpegEncoder, Error, TEXT("%s"), *ErrorMessage);
-		Result = FFmpegEncoderCloseResult::Failure;
-	};
+void UFFmpegEncoder::Close() {
+	// Open function must be called and Close function must not be called.
+	check(bOpened && !bClosed);
 
-	// notify that encoding is finished
-	if (avcodec_send_frame(ContextH264, nullptr) != 0) {
-		return Failure("Failed to flush send frame.");
-	}
+	// Mark as closed
+	bClosed = true;
 
-	// allocate Packet
-	AVPacket* Packet = av_packet_alloc();
-
-	// receive remaining packets
-	while (avcodec_receive_packet(ContextH264, Packet) == 0) {
-		// set stream index of this packet from stream
-		Packet->stream_index = Stream->index;
-
-		// rescale
-		av_packet_rescale_ts(Packet, ContextH264->time_base, Stream->time_base);
-
-		// write Packet to output media file
-		if (av_interleaved_write_frame(FormatContext, Packet) != 0) {
-			return Failure(
-			    "Failed to write frame to the output media file after flush.");
-		}
-
-		// unreference the buffer of Packet
-		av_packet_unref(Packet);
-	}
-
-	// write trailer to output file
-	if (av_write_trailer(FormatContext) != 0) {
-		return Failure(
-		    "Failed to write the stream header to the output media file.");
-	}
-
-	// free resources
-	av_packet_free(&Packet);
-	avcodec_free_context(&ContextH264);
-	avformat_free_context(FormatContext);
-	avio_closep(&IOContext);
-	FrameIndex = 0;
+	// stop background thread
+	Stop();
 }
 
 void UFFmpegEncoder::AddFrameFromRenderTarget(
@@ -173,6 +71,9 @@ void UFFmpegEncoder::AddFrameFromRenderTarget(
 
 	// check TextureRenderTarget
 	check(nullptr != TextureRenderTarget);
+
+	// Open function must be called and Close function must not be called.
+	check(bOpened && !bClosed);
 
 	// get TextureResource
 	const auto& TextureResource = TextureRenderTarget->GetResource();
@@ -226,20 +127,17 @@ void UFFmpegEncoder::AddFrame(const FTextureRHIRef&        TextureRHI,
 void UFFmpegEncoder::AddFrame(const FImage&                Image,
                               FFmpegEncoderAddFrameResult& Result,
                               FString&                     ErrorMessage) {
-	auto FFmpegFrameWrapper = FFFmpegFrameWrapper::CreateFrame(
-	    Image, FrameIndex, Config.Width, Config.Height);
+	auto FFmpegFrameWrapper =
+	    UFFmpegUtils::CreateFrame(Image, FrameIndex, Config.Width, Config.Height);
 	return AddFrame(MoveTemp(FFmpegFrameWrapper), Result, ErrorMessage);
 }
 
-void UFFmpegEncoder::AddFrame(const FFFmpegFrameWrapper&   Frame,
-                              FFmpegEncoderAddFrameResult& Result,
-                              FString&                     ErrorMessage) {
-	return AddFrame(Frame.GetRawFrame(), Result, ErrorMessage);
-}
+void UFFmpegEncoder::AddFrame(const FFFmpegFrameThreadSafeSharedPtr& Frame,
+                              FFmpegEncoderAddFrameResult&           Result,
+                              FString& ErrorMessage) {
+	// get Raw frame
+	const auto& RawFrame = Frame.Get();
 
-void UFFmpegEncoder::AddFrame(AVFrame* const               Frame,
-                              FFmpegEncoderAddFrameResult& Result,
-                              FString&                     ErrorMessage) {
 	// helper function to finish with success
 	const auto& Success = [&]() {
 		Result = FFmpegEncoderAddFrameResult::Success;
@@ -253,43 +151,213 @@ void UFFmpegEncoder::AddFrame(AVFrame* const               Frame,
 	};
 
 	// check FrameIndex is correct
-	check(FrameIndex == Frame->pts);
+	check(FrameIndex == RawFrame->pts);
 
-	// send a frame
-	if (avcodec_send_frame(ContextH264, Frame) != 0) {
-		return Failure("Failed to send frame.");
+	// enqueue frame
+	const auto& SuccessToEnqueue = Frames.Enqueue(Frame);
+	if (!SuccessToEnqueue) {
+		return Failure("Failed to enqueue the frame.");
 	}
-
-	// allocate Packet
-	AVPacket* Packet = av_packet_alloc();
-	if (nullptr == Packet) {
-		return Failure("Failed to allocate packet ...");
-	}
-
-	// receive a Packet
-	while (avcodec_receive_packet(ContextH264, Packet) == 0) {
-		check(Packet->size != 0);
-
-		// set stream index of this packet from stream
-		Packet->stream_index = Stream->index;
-
-		// rescale
-		av_packet_rescale_ts(Packet, ContextH264->time_base, Stream->time_base);
-	return Success();
-
-		// write Packet to output media file
-		if (av_interleaved_write_frame(FormatContext, Packet) != 0) {
-			return Failure(
-			    "Failed to write the stream header to the output media file.");
-		}
-
-		// unreference the buffer of Packet
-		av_packet_unref(Packet);
-	}
-
-	// free Packet resource
-	av_packet_free(&Packet);
 
 	// increment FrameIndex
 	++FrameIndex;
+
+	return Success();
+}
+
+UFFmpegEncoder::~UFFmpegEncoder() {
+	if (Thread) {
+		// wait to finish thread
+		Thread->Kill(true);
+
+		// release memory for Thread
+		delete Thread;
+	}
+}
+
+#pragma region Run on the new thread functions
+
+uint32 UFFmpegEncoder::Run() {
+	using enum FFmpegEncoderThreadResult;
+
+#pragma region Open
+	// get Codec
+	const auto& CodecH264 = avcodec_find_encoder(AV_CODEC_ID_H264);
+	if (nullptr == CodecH264) {
+		return static_cast<uint32>(CodecH264IsNotFound);
+	}
+
+	// get Codec Context
+	auto ContextH264 = avcodec_alloc_context3(CodecH264);
+	if (nullptr == ContextH264) {
+		return static_cast<uint32>(FailedToAllocateCodecContext);
+	}
+
+	// get from Config
+	const auto& [Width, Height, FrameRate, BitRate] =
+	    std::tie(Config.Width, Config.Height, Config.FrameRate, Config.BitRate);
+
+	// FrameRate as Rational
+	const auto FrameRateAsRational = av_d2q(FrameRate, INT_MAX);
+
+	// set Codec Context settings
+	ContextH264->width     = Width;
+	ContextH264->height    = Height;
+	ContextH264->bit_rate  = BitRate;
+	ContextH264->time_base = av_inv_q(FrameRateAsRational);
+	ContextH264->framerate = FrameRateAsRational;
+
+	ContextH264->gop_size     = 300;
+	ContextH264->max_b_frames = 12;
+	ContextH264->pix_fmt      = AV_PIX_FMT_YUV420P;
+
+	// set CRF quality value
+	AVDictionary* EncodeOptions = nullptr;
+	av_dict_set(&EncodeOptions, "crf", "18", 0);
+	if (avcodec_open2(ContextH264, CodecH264, &EncodeOptions) != 0) {
+		return static_cast<uint32>(FailedToInitializeCodecContext);
+	}
+	av_dict_free(&EncodeOptions);
+
+	// open output file
+	auto         OutputFilePathInUTF8 = StringCast<UTF8CHAR>(*VideoPath);
+	AVIOContext* IOContext            = nullptr;
+	if (avio_open(&IOContext,
+	              reinterpret_cast<const char*>(OutputFilePathInUTF8.Get()),
+	              AVIO_FLAG_WRITE) < 0) {
+		return static_cast<uint32>(FailedToInitializeIOContext);
+	}
+
+	// allocate memory to FormatContext
+	AVFormatContext* FormatContext = nullptr;
+	if (avformat_alloc_output_context2(
+	        &FormatContext, nullptr, nullptr,
+	        reinterpret_cast<const char*>(OutputFilePathInUTF8.Get())) < 0) {
+		return static_cast<uint32>(FailedToAllocateFormatContext);
+	}
+
+	// set FormatContext to output to specified output file
+	FormatContext->pb = IOContext;
+
+	// add new stream to file
+	const auto& Stream = avformat_new_stream(FormatContext, CodecH264);
+	if (nullptr == Stream) {
+		return static_cast<uint32>(FailedToAddANewStream);
+	}
+
+	// set Stream information
+	Stream->sample_aspect_ratio = ContextH264->sample_aspect_ratio;
+	Stream->time_base           = ContextH264->time_base;
+
+	// set parameter from codec context h264
+	if (avcodec_parameters_from_context(Stream->codecpar, ContextH264) != 0) {
+		return static_cast<uint32>(FailedToSetCodecParameters);
+	}
+
+	// write header to output file
+	if (avformat_write_header(FormatContext, nullptr) != 0) {
+		return static_cast<uint32>(FailedToWriteHeader);
+	}
+#pragma endregion
+
+#pragma region AddFrame
+	auto ReceiveAllPendingPackets = [&]() {
+		// allocate Packet
+		AVPacket* Packet = av_packet_alloc();
+		if (nullptr == Packet) {
+			return FailedToAllocatePacket;
+		}
+
+		// receive a Packet
+		while (avcodec_receive_packet(ContextH264, Packet) == 0) {
+			check(Packet->size != 0);
+
+			// set stream index of this packet from stream
+			Packet->stream_index = Stream->index;
+
+			// rescale
+			av_packet_rescale_ts(Packet, ContextH264->time_base, Stream->time_base);
+
+			// write Packet to output media file
+			if (av_interleaved_write_frame(FormatContext, Packet) != 0) {
+				return FailedToWritePacket;
+			}
+
+			// un reference the buffer of Packet
+			av_packet_unref(Packet);
+		}
+
+		// free Packet resource
+		av_packet_free(&Packet);
+
+		// success
+		return Success;
+	};
+
+	// Pause encode thread until Stop or AddFrame is called
+	//	TryPauseEncodeThread();
+
+	// Loop while the status is in running or Frames is not empty.
+	while (bRunning || !Frames.IsEmpty()) {
+		// if Frames queue is empty
+		if (Frames.IsEmpty()) {
+			// sleep for a little while
+			FPlatformProcess::Sleep(1);
+
+			// loop again
+			continue;
+		}
+
+		// get a frame pending encoding frame
+		FFFmpegFrameThreadSafeSharedPtr Frame;
+		Frames.Dequeue(Frame);
+
+		// send a frame
+		if (avcodec_send_frame(ContextH264, Frame.Get()) != 0) {
+			return static_cast<uint32>(FailedToSendFrame);
+		}
+
+		// Receive all packets
+		const auto& ReceiveResult = ReceiveAllPendingPackets();
+
+		// failed to receive packets
+		if (ReceiveResult != Success) {
+			return static_cast<uint32>(ReceiveResult);
+		}
+	}
+#pragma endregion
+
+#pragma region Close
+	// notify that encoding is finished
+	if (avcodec_send_frame(ContextH264, nullptr) != 0) {
+		return static_cast<int32>(FailedToFlushSendFrame);
+	}
+
+	// Receive all packets
+	const auto& ReceiveResult = ReceiveAllPendingPackets();
+
+	// failed to receive packets
+	if (ReceiveResult != Success) {
+		return static_cast<uint32>(ReceiveResult);
+	}
+
+	// write trailer to output file
+	if (av_write_trailer(FormatContext) != 0) {
+		return static_cast<int32>(FailedToWriteTrailer);
+	}
+
+	// free resources
+	avcodec_free_context(&ContextH264);
+	avformat_free_context(FormatContext);
+	avio_closep(&IOContext);
+#pragma endregion
+
+	return static_cast<uint32>(Success);
+}
+
+#pragma endregion
+
+void UFFmpegEncoder::Stop() {
+	// stop running
+	bRunning = false;
 }

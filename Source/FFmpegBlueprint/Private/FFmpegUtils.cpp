@@ -26,8 +26,5 @@ void UFFmpegUtils::GenerateVideoFromImageFiles(
 		check(FFmpegEncoderAddFrameResult::Success == AddFrame_Result);
 	}
 
-	FFmpegEncoderCloseResult Close_Result;
-	FString                  Close_ErrorMessage;
-	FFmpegEncoder->Close(Close_Result, Close_ErrorMessage);
-	check(FFmpegEncoderCloseResult::Success == Close_Result);
+	FFmpegEncoder->Close();
 }

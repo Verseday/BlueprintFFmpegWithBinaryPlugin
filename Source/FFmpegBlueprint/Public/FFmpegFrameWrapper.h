@@ -4,44 +4,58 @@
 
 #include "CoreMinimal.h"
 
-#include <optional>
-
 extern "C" {
 #include <libavutil/frame.h>
 }
 
 /**
- *
+ * wrapper for AVFrame of FFmpeg.
+ * Threadsafe.
  */
-struct FFMPEGBLUEPRINT_API FFFmpegFrameWrapper {
+template <ESPMode InMode>
+struct FFMPEGBLUEPRINT_API TFFmpegFrameSharedPtr {
 public:
-	AVFrame* GetRawFrame() const;
+	AVFrame* Get() const;
 
 public:
-	FFFmpegFrameWrapper();
-	FFFmpegFrameWrapper(AVFrame* InRawFrame);
-	static FFFmpegFrameWrapper CreateFrame(
-	    const FString& ImagePath, int FrameIndex,
-	    std::optional<int> FrameWidth = {}, std::optional<int> FrameHeight = {},
-	    AVPixelFormat PixelFormat = AVPixelFormat::AV_PIX_FMT_YUV420P);
-	static FFFmpegFrameWrapper CreateFrame(
-	    const FImage& Image, int FrameIndex, std::optional<int> FrameWidth = {},
-	    std::optional<int> FrameHeight = {},
-	    AVPixelFormat      PixelFormat = AVPixelFormat::AV_PIX_FMT_YUV420P);
-
-public:
-	~FFFmpegFrameWrapper();
-
-public:
-	// copy constructor
-	FFFmpegFrameWrapper(const FFFmpegFrameWrapper& Source);
-	// move constructor
-	FFFmpegFrameWrapper(FFFmpegFrameWrapper&& Source);
-	// copy assignment operator
-	FFFmpegFrameWrapper& operator=(const FFFmpegFrameWrapper& Source);
-	// move assignment operator
-	FFFmpegFrameWrapper& operator=(FFFmpegFrameWrapper&& Source);
+	TFFmpegFrameSharedPtr();
+	explicit TFFmpegFrameSharedPtr(AVFrame* InRawFrame);
+	explicit operator bool() const;
+	AVFrame& operator*() const;
+	AVFrame* operator->() const;
 
 private:
-	AVFrame* RawFrame = nullptr;
+	TSharedPtr<AVFrame, InMode> RawFrameSharedPtr;
 };
+
+using FFFmpegFrameThreadSafeSharedPtr =
+    TFFmpegFrameSharedPtr<ESPMode::ThreadSafe>;
+
+template <ESPMode InMode>
+AVFrame* TFFmpegFrameSharedPtr<InMode>::Get() const {
+	return RawFrameSharedPtr.Get();
+}
+
+template <ESPMode InMode>
+TFFmpegFrameSharedPtr<InMode>::TFFmpegFrameSharedPtr()
+    : TFFmpegFrameSharedPtr(av_frame_alloc()) {}
+
+template <ESPMode InMode>
+TFFmpegFrameSharedPtr<InMode>::TFFmpegFrameSharedPtr(AVFrame* InRawFrame)
+    : RawFrameSharedPtr(InRawFrame,
+                        [](AVFrame* Frame) { av_frame_free(&Frame); }) {}
+
+template <ESPMode InMode>
+inline TFFmpegFrameSharedPtr<InMode>::operator bool() const {
+	return RawFrameSharedPtr.operator bool();
+}
+
+template <ESPMode InMode>
+inline AVFrame& TFFmpegFrameSharedPtr<InMode>::operator*() const {
+	return *RawFrameSharedPtr;
+}
+
+template <ESPMode InMode>
+inline AVFrame* TFFmpegFrameSharedPtr<InMode>::operator->() const {
+	return RawFrameSharedPtr.Get();
+}
