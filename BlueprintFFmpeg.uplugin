@@ -2,7 +2,7 @@
 	"FileVersion": 3,
 	"Version": 1,
 	"VersionName": "1.0",
-	"FriendlyName": "FFmpegBlueprint",
+	"FriendlyName": "BlueprintFFmpeg",
 	"Description": "Plugin to make it easy to use FFmpeg from blueprint.",
 	"Category": "Other",
 	"CreatedBy": "Udon-Tobira",
@@ -16,7 +16,7 @@
 	"Installed": false,
 	"Modules": [
 		{
-			"Name": "FFmpegBlueprint",
+			"Name": "BlueprintFFmpeg",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}
