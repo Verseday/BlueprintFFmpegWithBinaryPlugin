@@ -148,6 +148,13 @@ public:
 	virtual uint32 Run() override;
 	virtual void   Stop() override;
 
+	// private constants
+private:
+	static constexpr const TCHAR checkfMesNotOpened_AddFrame[] =
+	    TEXT("Before calling this function, Open function must be called.");
+	static constexpr const TCHAR checkfMesClosed_AddFrame[] = TEXT(
+	    "Once Close function is called, this function can no longer be called.");
+
 	// private fields: no data race
 private:
 	bool                 bOpened = false;
@@ -170,6 +177,12 @@ template <typename FTextureRHIRef_T>
 void UFFmpegEncoder::AddFrame(FTextureRHIRef_T&&           TextureRHI,
                               FFmpegEncoderAddFrameResult& Result,
                               FString&                     ErrorMessage) {
+	// Open function must be called
+	checkf(bOpened, checkfMesNotOpened_AddFrame);
+
+	// and Close function must not be called.
+	checkf(!bClosed, checkfMesClosed_AddFrame);
+
 	auto Image = CreateImageFromTextureRHI(Forward<FTextureRHIRef_T>(TextureRHI));
 	return AddFrame(MoveTemp(Image), Result, ErrorMessage);
 }
@@ -180,6 +193,12 @@ template <typename FImage_T>
 void UFFmpegEncoder::AddFrame(FImage_T&&                   Image,
                               FFmpegEncoderAddFrameResult& Result,
                               FString&                     ErrorMessage) {
+	// Open function must be called
+	checkf(bOpened, checkfMesNotOpened_AddFrame);
+
+	// and Close function must not be called.
+	checkf(!bClosed, checkfMesClosed_AddFrame);
+
 	auto FFmpegFrameWrapper = UFFmpegUtils::CreateFrame(
 	    Forward<FImage_T>(Image), FrameIndex, Config.Width, Config.Height);
 	return AddFrame(MoveTemp(FFmpegFrameWrapper), Result, ErrorMessage);
@@ -193,6 +212,12 @@ template <typename FFFmpegFrameThreadSafeSharedPtr_T>
 void UFFmpegEncoder::AddFrame(FFFmpegFrameThreadSafeSharedPtr_T&& Frame,
                               FFmpegEncoderAddFrameResult&        Result,
                               FString& ErrorMessage) {
+	// Open function must be called
+	checkf(bOpened, checkfMesNotOpened_AddFrame);
+
+	// and Close function must not be called.
+	checkf(!bClosed, checkfMesClosed_AddFrame);
+
 	// helper function to finish with success
 	const auto& Success = [&]() {
 		Result = FFmpegEncoderAddFrameResult::Success;

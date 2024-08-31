@@ -31,7 +31,7 @@ void UFFmpegEncoder::Open(const FFFmpegEncoderConfig& FFmpegEncoderConfig,
 	};
 
 	// Open function must be called only once.
-	check(!bOpened);
+	checkf(!bOpened, TEXT("Open function has already been called once."));
 
 	// Mark as opened
 	bOpened = true;
@@ -53,8 +53,12 @@ void UFFmpegEncoder::Open(const FFFmpegEncoderConfig& FFmpegEncoderConfig,
 }
 
 void UFFmpegEncoder::Close() {
-	// Open function must be called and Close function must not be called.
-	check(bOpened && !bClosed);
+	// Open function must be called
+	ensureMsgf(bOpened, TEXT("You called Close function even though you didn't "
+	                         "call Open function."));
+
+	// and Close function must not be called.
+	checkf(!bClosed, TEXT("Close function has already been called once."));
 
 	// Mark as closed
 	bClosed = true;
@@ -76,8 +80,11 @@ void UFFmpegEncoder::AddFrameFromRenderTarget(
 	// check TextureRenderTarget
 	check(nullptr != TextureRenderTarget);
 
-	// Open function must be called and Close function must not be called.
-	check(bOpened && !bClosed);
+	// Open function must be called
+	checkf(bOpened, checkfMesNotOpened_AddFrame);
+
+	// and Close function must not be called.
+	checkf(!bClosed, checkfMesClosed_AddFrame);
 
 	// get TextureResource
 	const auto& TextureResource = TextureRenderTarget->GetResource();
@@ -107,6 +114,12 @@ void UFFmpegEncoder::AddFrameFromImagePath(const FString& ImagePath,
 		UE_LOG(LogFFmpegEncoder, Error, TEXT("%s"), *ErrorMessage);
 		Result = FFmpegEncoderAddFrameResult::Failure;
 	};
+
+	// Open function must be called
+	checkf(bOpened, checkfMesNotOpened_AddFrame);
+
+	// and Close function must not be called.
+	checkf(!bClosed, checkfMesClosed_AddFrame);
 
 	// Load image from ImagePath
 	FImage      Image;
