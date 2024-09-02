@@ -3,10 +3,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "FFmpegFrameWrapper.h"
+#include "FFmpegFrameSharedPtr.h"
+#include "ImageCore.h"
 #include "ImageUtils.h"
 
-#include <ImageCore.h>
 #include <optional>
 
 extern "C" {

@@ -3,52 +3,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CreateImageFromTextureRHI.h"
+#include "FFmpegEncodeThread.h"
 #include "FFmpegEncoderConfig.h"
-#include "FFmpegFrameWrapper.h"
-#include "FFmpegUtils.h"
-#include "LogFFmpegEncoder.h"
-
-#include <atomic>
 
 #include "FFmpegEncoder.generated.h"
-
-/**
- * Result type of UFFmpegEncoder::Open
- */
-UENUM(BlueprintType)
-enum class FFmpegEncoderOpenResult : uint8 { Success, Failure };
-
-/**
- * Result type of UFFmpegEncoder::Close
- */
-UENUM(BlueprintType)
-enum class FFmpegEncoderCloseResult : uint8 { Success, Failure };
-
-/**
- * Result type of UFFmpegEncoder::AddFrame
- */
-UENUM(BlueprintType)
-enum class FFmpegEncoderAddFrameResult : uint8 { Success, Failure };
-
-enum class FFmpegEncoderThreadResult {
-	Success = 0,
-	CodecH264IsNotFound,
-	FailedToAllocateCodecContext,
-	FailedToInitializeCodecContext,
-	FailedToInitializeIOContext,
-	FailedToAllocateFormatContext,
-	FailedToAddANewStream,
-	FailedToSetCodecParameters,
-	FailedToWriteHeader,
-
-	FailedToSendFrame,
-	FailedToAllocatePacket,
-	FailedToWritePacket,
-
-	FailedToFlushSendFrame,
-	FailedToWriteTrailer
-};
 
 /**
  * A video encoder that uses FFmpeg and can be used from blueprint.
@@ -60,13 +18,13 @@ enum class FFmpegEncoderThreadResult {
  * then the video is output to the OutputFilePath specified in Open function.
  */
 UCLASS(Blueprintable, BlueprintType)
-class BLUEPRINTFFMPEG_API UFFmpegEncoder: public UObject, public FRunnable {
+class BLUEPRINTFFMPEG_API UFFmpegEncoder: public UObject {
 	GENERATED_BODY()
 
 	// type aliases
 public:
-	using TTask_Frame = UE::Tasks::TTask<FFFmpegFrameThreadSafeSharedPtr>;
-	using TTask_Image = UE::Tasks::TTask<FImage>;
+	using TTask_Frame = FFFmpegEncodeThread::TTask_Frame;
+	using TTask_Image = FFFmpegEncodeThread::TTask_Image;
 
 	// blueprint functions
 public:
@@ -143,35 +101,9 @@ public:
 	void AddFrame(TTaskFFFmpegFrameThreadSafeSharedPtr_T&& Frame,
 	              FFmpegEncoderAddFrameResult& Result, FString& ErrorMessage);
 
-public:
-	~UFFmpegEncoder();
-
-	// FRunnable interfaces
-public:
-	virtual uint32 Run() override;
-	virtual void   Stop() override;
-
-	// private constants
+	// private fields
 private:
-	static constexpr const TCHAR checkfMesNotOpened_AddFrame[] =
-	    TEXT("Before calling this function, Open function must be called.");
-	static constexpr const TCHAR checkfMesClosed_AddFrame[] = TEXT(
-	    "Once Close function is called, this function can no longer be called.");
-
-	// private fields: no data race
-private:
-	bool                 bOpened = false;
-	bool                 bClosed = false;
-	FFFmpegEncoderConfig Config;
-	FString              VideoPath;
-	int64_t              FrameIndex = 0;
-	FRunnableThread*     Thread     = nullptr;
-
-	// private fields: beware of data race
-private:
-	// single-producer, single-consumer
-	TQueue<TTask_Frame, EQueueMode::Spsc> FrameTasks;
-	std::atomic_bool                      bRunning = true;
+	FFFmpegEncodeThread FFmpegEncodeThread;
 };
 
 #pragma region definition of template functions
@@ -180,17 +112,8 @@ template <typename FTextureRHIRef_T>
 void UFFmpegEncoder::AddFrame(FTextureRHIRef_T&&           TextureRHI,
                               FFmpegEncoderAddFrameResult& Result,
                               FString&                     ErrorMessage) {
-	// Open function must be called
-	checkf(bOpened, checkfMesNotOpened_AddFrame);
-
-	// and Close function must not be called.
-	checkf(!bClosed, checkfMesClosed_AddFrame);
-
-	// launch task to create image
-	auto ImageTask =
-	    CreateImageFromTextureRHIAsync(Forward<FTextureRHIRef_T>(TextureRHI));
-
-	return AddFrame(MoveTemp(ImageTask), Result, ErrorMessage);
+	FFmpegEncodeThread.AddFrame(Forward<FTextureRHIRef_T>(TextureRHI), Result,
+	                            ErrorMessage);
 }
 
 template <typename TTaskFFFmpegFrameThreadSafeSharedPtr_T>
@@ -200,36 +123,8 @@ template <typename TTaskFFFmpegFrameThreadSafeSharedPtr_T>
 void UFFmpegEncoder::AddFrame(TTaskFFFmpegFrameThreadSafeSharedPtr_T&& Frame,
                               FFmpegEncoderAddFrameResult&             Result,
                               FString& ErrorMessage) {
-	// Open function must be called
-	checkf(bOpened, checkfMesNotOpened_AddFrame);
-
-	// and Close function must not be called.
-	checkf(!bClosed, checkfMesClosed_AddFrame);
-
-	// helper function to finish with success
-	const auto& Success = [&]() {
-		Result = FFmpegEncoderAddFrameResult::Success;
-	};
-
-	// helper function to finish with failure
-	const auto& Failure = [&](const FString& Message) {
-		ErrorMessage = Message;
-		UE_LOG(LogFFmpegEncoder, Error, TEXT("%s"), *ErrorMessage);
-		Result = FFmpegEncoderAddFrameResult::Failure;
-	};
-
-	// enqueue frame
-	const auto& SuccessToEnqueue = FrameTasks.Enqueue(
-	    Forward<TTaskFFFmpegFrameThreadSafeSharedPtr_T>(Frame));
-
-	// if failed to enqueue
-	if (!SuccessToEnqueue) {
-		return Failure("Failed to enqueue the frame.");
-	}
-
-	// increment FrameIndex
-	++FrameIndex;
-
-	return Success();
+	return FFmpegEncodeThread.AddFrame(
+	    Forward<TTaskFFFmpegFrameThreadSafeSharedPtr_T>(Frame), Result,
+	    ErrorMessage);
 }
 #pragma endregion
