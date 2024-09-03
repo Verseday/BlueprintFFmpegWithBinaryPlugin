@@ -32,16 +32,16 @@ public class FFmpeg : ModuleRules
             PublicAdditionalLibraries.Add(Path.Combine(FFmpegLibDirectoryPath, "avformat.lib"));
             PublicAdditionalLibraries.Add(Path.Combine(FFmpegLibDirectoryPath, "swscale.lib"));
             PublicAdditionalLibraries.Add(Path.Combine(FFmpegLibDirectoryPath, "avutil.lib"));
+
             // Delay-load the DLL, so we can load it from the right place first
             PublicDelayLoadDLLs.Add(Path.Combine(FFmpegDllFilePath));
-
 
             // Ensure that the DLLs are staged along with the executable
             RuntimeDependencies.Add("$(BinaryOutputDir)", FFmpegDllFilePath);
         }
         else if (Target.Platform == UnrealTargetPlatform.Mac)
         {
-            var FFmpegDylibFilePath = Path.Combine(FFmpegBinDirectoryPath, "Release", "*.dylib");
+            var FFmpegDylibFilePath = Path.Combine(FFmpegBinDirectoryPath, "*.dylib");
 
             // Delay-load the DLL, so we can load it from the right place first
             PublicDelayLoadDLLs.Add(Path.Combine(FFmpegDylibFilePath));
@@ -52,7 +52,7 @@ public class FFmpeg : ModuleRules
         else if (Target.Platform == UnrealTargetPlatform.Android)
         {
             // Add the import library
-            PublicAdditionalLibraries.Add(Path.Combine(FFmpegBinDirectoryPath, "arm64-v8a", "*.so"));
+            PublicAdditionalLibraries.Add(Path.Combine(FFmpegBinDirectoryPath, "*.so"));
         }
         else if (Target.Platform == UnrealTargetPlatform.Linux)
         {
