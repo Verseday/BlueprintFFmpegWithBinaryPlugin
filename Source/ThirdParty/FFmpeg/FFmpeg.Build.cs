@@ -25,13 +25,13 @@ public class FFmpeg : ModuleRules
 
         if (Target.Platform == UnrealTargetPlatform.Win64)
         {
-            var FFmpegDllFilePath = Path.Combine(FFmpegBinDirectoryPath, "*.dll");
+            var FFmpegDllFilePath = Path.Combine(FFmpegBinDirectoryPath, "Windows", "*.dll");
 
             // Add the import library
-            PublicAdditionalLibraries.Add(Path.Combine(FFmpegLibDirectoryPath, "avcodec.lib"));
-            PublicAdditionalLibraries.Add(Path.Combine(FFmpegLibDirectoryPath, "avformat.lib"));
-            PublicAdditionalLibraries.Add(Path.Combine(FFmpegLibDirectoryPath, "swscale.lib"));
-            PublicAdditionalLibraries.Add(Path.Combine(FFmpegLibDirectoryPath, "avutil.lib"));
+            PublicAdditionalLibraries.Add(Path.Combine(FFmpegLibDirectoryPath, "Windows", "avcodec.lib"));
+            PublicAdditionalLibraries.Add(Path.Combine(FFmpegLibDirectoryPath, "Windows", "avformat.lib"));
+            PublicAdditionalLibraries.Add(Path.Combine(FFmpegLibDirectoryPath, "Windows", "swscale.lib"));
+            PublicAdditionalLibraries.Add(Path.Combine(FFmpegLibDirectoryPath, "Windows", "avutil.lib"));
 
             // Delay-load the DLL, so we can load it from the right place first
             PublicDelayLoadDLLs.Add(Path.Combine(FFmpegDllFilePath));
