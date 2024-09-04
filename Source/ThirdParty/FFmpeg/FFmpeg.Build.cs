@@ -41,13 +41,23 @@ public class FFmpeg : ModuleRules
         }
         else if (Target.Platform == UnrealTargetPlatform.Mac)
         {
-            var FFmpegDylibFilePath = Path.Combine(FFmpegBinDirectoryPath, "*.dylib");
+            var MacArchBinDirectoryPath = Path.Combine(FFmpegBinDirectoryPath, "Mac");
+            var LibAvcodecDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavcodec.dylib");
+            var LibFormatDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavformat.dylib");
+            var LibSwscaleDylibPath = Path.Combine(MacArchBinDirectoryPath, "libswscale.dylib");
+            var LibAvutilDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavutil.dylib");
 
             // Delay-load the DLL, so we can load it from the right place first
-            PublicDelayLoadDLLs.Add(Path.Combine(FFmpegDylibFilePath));
+            PublicDelayLoadDLLs.Add(LibAvcodecDylibPath);
+            PublicDelayLoadDLLs.Add(LibFormatDylibPath);
+            PublicDelayLoadDLLs.Add(LibSwscaleDylibPath);
+            PublicDelayLoadDLLs.Add(LibAvutilDylibPath);
 
             // Ensure that the DLL is staged along with the executable
-            RuntimeDependencies.Add("$(BinaryOutputDir)", FFmpegDylibFilePath);
+            RuntimeDependencies.Add("$(BinaryOutputDir)/libavcodec.dylib", LibAvcodecDylibPath);
+            RuntimeDependencies.Add("$(BinaryOutputDir)/libavformat.dylib", LibFormatDylibPath);
+            RuntimeDependencies.Add("$(BinaryOutputDir)/libswscale.dylib", LibSwscaleDylibPath);
+            RuntimeDependencies.Add("$(BinaryOutputDir)/libavutil.dylib", LibAvutilDylibPath);
         }
         else if (Target.Platform == UnrealTargetPlatform.Android)
         {
