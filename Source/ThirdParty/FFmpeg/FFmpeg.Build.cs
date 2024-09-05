@@ -42,22 +42,22 @@ public class FFmpeg : ModuleRules
         else if (Target.Platform == UnrealTargetPlatform.Mac)
         {
             var MacArchBinDirectoryPath = Path.Combine(FFmpegBinDirectoryPath, "Mac");
-            var LibAvcodecDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavcodec.dylib");
-            var LibFormatDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavformat.dylib");
-            var LibSwscaleDylibPath = Path.Combine(MacArchBinDirectoryPath, "libswscale.dylib");
-            var LibAvutilDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavutil.dylib");
+            var LibAvcodecDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavcodec.61.dylib");
+            var LibFormatDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavformat.61.dylib");
+            var LibAvutilDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavutil.59.dylib");
+            var LibSwscaleDylibPath = Path.Combine(MacArchBinDirectoryPath, "libswscale.8.dylib");
 
             // Delay-load the DLL, so we can load it from the right place first
             PublicDelayLoadDLLs.Add(LibAvcodecDylibPath);
             PublicDelayLoadDLLs.Add(LibFormatDylibPath);
-            PublicDelayLoadDLLs.Add(LibSwscaleDylibPath);
             PublicDelayLoadDLLs.Add(LibAvutilDylibPath);
+            PublicDelayLoadDLLs.Add(LibSwscaleDylibPath);
 
             // Ensure that the DLL is staged along with the executable
-            RuntimeDependencies.Add("$(BinaryOutputDir)/libavcodec.dylib", LibAvcodecDylibPath);
-            RuntimeDependencies.Add("$(BinaryOutputDir)/libavformat.dylib", LibFormatDylibPath);
-            RuntimeDependencies.Add("$(BinaryOutputDir)/libswscale.dylib", LibSwscaleDylibPath);
-            RuntimeDependencies.Add("$(BinaryOutputDir)/libavutil.dylib", LibAvutilDylibPath);
+            RuntimeDependencies.Add(LibAvcodecDylibPath);
+            RuntimeDependencies.Add(LibFormatDylibPath);
+            RuntimeDependencies.Add(LibAvutilDylibPath);
+            RuntimeDependencies.Add(LibSwscaleDylibPath);
         }
         else if (Target.Platform == UnrealTargetPlatform.Android)
         {
