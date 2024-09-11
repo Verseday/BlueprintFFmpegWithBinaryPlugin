@@ -1,0 +1,6 @@
+[submodule "Source/ThirdParty/x264"]
+	path = Source/ThirdParty/x264
+	url = https://code.videolan.org/videolan/x264.git
+[submodule "Source/ThirdParty/FFmpeg/ffmpeg"]
+	path = Source/ThirdParty/FFmpeg/ffmpeg
+	url = https://git.ffmpeg.org/ffmpeg.git
