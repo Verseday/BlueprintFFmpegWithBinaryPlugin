@@ -10,7 +10,7 @@ public class FFmpeg : ModuleRules
         Type = ModuleType.External;
 
         // get FFmpeg directory path
-        var FFmpegDirectoryPath = Path.Combine(ModuleDirectory, "FFmpeg");
+        var FFmpegDirectoryPath = Path.Combine(ModuleDirectory, "FFmpegBinary");
 
         // get FFmpeg libavcodec directory path
         var FFmpegIncludeDirectoryPath = Path.Combine(FFmpegDirectoryPath, "bin", "include");
