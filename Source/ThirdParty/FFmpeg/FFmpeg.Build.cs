@@ -9,22 +9,22 @@ public class FFmpeg : ModuleRules
     {
         Type = ModuleType.External;
 
-        // get FFmpeg directory path
-        var FFmpegDirectoryPath = Path.Combine(ModuleDirectory, "FFmpegBinary");
-
-        // get FFmpeg libavcodec directory path
-        var FFmpegIncludeDirectoryPath = Path.Combine(FFmpegDirectoryPath, "bin", "include");
-
-        // get FFmpeg lib directory path
-        var FFmpegLibDirectoryPath = Path.Combine(FFmpegDirectoryPath, "bin");
-
-        // get FFmpeg bin directory path
-        var FFmpegBinDirectoryPath = Path.Combine(FFmpegDirectoryPath, "bin");
-
-        PublicSystemIncludePaths.Add(FFmpegIncludeDirectoryPath);
-
         if (Target.Platform == UnrealTargetPlatform.Win64)
         {
+            // get FFmpeg directory path
+            var FFmpegDirectoryPath = Path.Combine(ModuleDirectory, "FFmpegBinary");
+
+            // get FFmpeg libavcodec directory path
+            var FFmpegIncludeDirectoryPath = Path.Combine(FFmpegDirectoryPath, "bin", "include");
+
+            // get FFmpeg lib directory path
+            var FFmpegLibDirectoryPath = Path.Combine(FFmpegDirectoryPath, "bin");
+
+            // get FFmpeg bin directory path
+            var FFmpegBinDirectoryPath = Path.Combine(FFmpegDirectoryPath, "bin");
+
+            PublicSystemIncludePaths.Add(FFmpegIncludeDirectoryPath);
+
             var FFmpegDllFilePath = Path.Combine(FFmpegBinDirectoryPath, "Windows", "*.dll");
 
             // Add the import library
@@ -41,11 +41,22 @@ public class FFmpeg : ModuleRules
         }
         else if (Target.Platform == UnrealTargetPlatform.Mac)
         {
-            var MacArchBinDirectoryPath = Path.Combine(FFmpegBinDirectoryPath, "Mac");
-            var LibAvcodecDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavcodec.61.dylib");
-            var LibFormatDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavformat.61.dylib");
-            var LibAvutilDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavutil.59.dylib");
-            var LibSwscaleDylibPath = Path.Combine(MacArchBinDirectoryPath, "libswscale.8.dylib");
+            // get FFmpeg directory path
+            var FFmpegDirectoryPath = Path.Combine(ModuleDirectory, "ffmpeg");
+
+            // get FFmpeg include directory path
+            var FFmpegIncludeDirectoryPath = Path.Combine(FFmpegDirectoryPath, "include");
+
+            // get FFmpeg lib directory path
+            var FFmpegLibDirectoryPath = Path.Combine(FFmpegDirectoryPath, "lib");
+
+            PublicSystemIncludePaths.Add(FFmpegIncludeDirectoryPath);
+
+            var MacArchBinDirectoryPath = Path.Combine(FFmpegLibDirectoryPath);
+            var LibAvcodecDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavcodec.dylib");
+            var LibFormatDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavformat.dylib");
+            var LibAvutilDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavutil.dylib");
+            var LibSwscaleDylibPath = Path.Combine(MacArchBinDirectoryPath, "libswscale.dylib");
 
             // Delay-load the DLL, so we can load it from the right place first
             PublicDelayLoadDLLs.Add(LibAvcodecDylibPath);
@@ -59,18 +70,18 @@ public class FFmpeg : ModuleRules
             RuntimeDependencies.Add(LibAvutilDylibPath);
             RuntimeDependencies.Add(LibSwscaleDylibPath);
         }
-        else if (Target.Platform == UnrealTargetPlatform.Android)
-        {
-            // Add the import library
-            PublicAdditionalLibraries.Add(Path.Combine(FFmpegBinDirectoryPath, "*.so"));
-        }
-        else if (Target.Platform == UnrealTargetPlatform.Linux)
-        {
-            string LibFFmpegSoPath = Path.Combine(FFmpegBinDirectoryPath, "*.so");
+        // else if (Target.Platform == UnrealTargetPlatform.Android)
+        // {
+        //     // Add the import library
+        //     PublicAdditionalLibraries.Add(Path.Combine(FFmpegBinDirectoryPath, "*.so"));
+        // }
+        // else if (Target.Platform == UnrealTargetPlatform.Linux)
+        // {
+        //     string LibFFmpegSoPath = Path.Combine(FFmpegBinDirectoryPath, "*.so");
 
-            PublicAdditionalLibraries.Add(LibFFmpegSoPath);
-            PublicDelayLoadDLLs.Add(LibFFmpegSoPath);
-            RuntimeDependencies.Add(LibFFmpegSoPath);
-        }
+        //     PublicAdditionalLibraries.Add(LibFFmpegSoPath);
+        //     PublicDelayLoadDLLs.Add(LibFFmpegSoPath);
+        //     RuntimeDependencies.Add(LibFFmpegSoPath);
+        // }
     }
 }
