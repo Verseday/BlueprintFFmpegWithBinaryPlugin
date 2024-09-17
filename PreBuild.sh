@@ -24,6 +24,11 @@ assureExecute() {
     fi
 }
 
+# Function to remove version numbers from dylib file name
+removeVersion() {
+    sed -E 's/\.[0-9]+//g'
+}
+
 # Main script
 (
     # Ensure make command exists
@@ -44,8 +49,8 @@ assureExecute() {
     # Run make command
     assureExecute make
 
-    # if directory "lib" doesn't exist (i.e. make install has not executed)
-    if [ ! -d lib ]; then
+    # if directory "lib/libx264.a" doesn't exist (i.e. make install has not executed)
+    if [ ! -e lib/libx264.a ]; then
         assureExecute make install
     fi
 
@@ -67,26 +72,39 @@ assureExecute() {
     # Run make command
     assureExecute make
 
-    # if directory "lib" doesn't exist (i.e. make install has not executed)
-    if [ ! -d lib ]; then
-        assureExecute make install
-    fi
+    # if directory "include/libavcodec" doesn't exist (i.e. make install has not executed)
+    if [ ! -d include/libavcodec ]; then
+        # install ffmpeg libraries
+        assureExecute make install to lib directory
 
+        ######### change ffmpeg shared libraries (.dylib) to rpath ########
 
-    ######### change ffmpeg shared libraries (.dylib) to rpath ########
+        # Change to the library directory
+        cd lib
 
-    # Change to the library directory
-    cd lib
+        # for all *.dylib files in lib directory
+        for lib_name in *.dylib; do
+            # change install path to itself
+            install_name_tool -id "@rpath/$lib_name" "$lib_name"
 
-    # for all *.dylib files in lib directory
-    for lib_name in *.dylib; do
-        # change install path to itself
-        install_name_tool -id "@rpath/$lib_name" "$lib_name"
-
-        # loop for all the other *.dylib file names
-        for other_lib_name in *.dylib; do
-            # change install path on this library to other_lib_name to rpath
-            install_name_tool -change "$(pwd)/$other_lib_name" "@rpath/$other_lib_name" "$lib_name"
+            # loop for all the other *.dylib file names
+            for other_lib_name in *.dylib; do
+                other_lib_name_without_version=$(echo "$other_lib_name" | removeVersion)
+                # change install path on this library to other_lib_name to rpath
+                install_name_tool -change "$(pwd)/$other_lib_name" "@rpath/$other_lib_name_without_version" "$lib_name"
+            done
         done
-    done
+
+        # for all .*\.dylib or .*\..*\.dylib alias files in lib directory
+        for alias_file_relpath in $(find . -type l); do
+            # remove it
+            rm $alias_file_relpath
+        done
+
+        # for all real dylib files
+        for lib_name_with_version in *.dylib; do
+            # rename it to a name that doesn't include the version number
+            mv "$lib_name_with_version" "$(echo $lib_name_with_version | removeVersion)"
+        done
+    fi
 )
