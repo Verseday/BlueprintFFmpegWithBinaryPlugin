@@ -74,8 +74,8 @@ removeVersion() {
 
     # if directory "include/libavcodec" doesn't exist (i.e. make install has not executed)
     if [ ! -d include/libavcodec ]; then
-        # install ffmpeg libraries
-        assureExecute make install to lib directory
+        # install ffmpeg libraries to lib directory
+        assureExecute make install
 
         ######### change ffmpeg shared libraries (.dylib) to rpath ########
 
