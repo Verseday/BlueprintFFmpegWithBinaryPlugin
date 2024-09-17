@@ -84,8 +84,9 @@ removeVersion() {
 
         # for all *.dylib files in lib directory
         for lib_name in *.dylib; do
+            lib_name_without_version=$(echo "$lib_name" | removeVersion)
             # change install path to itself
-            install_name_tool -id "@rpath/$lib_name" "$lib_name"
+            install_name_tool -id "@rpath/$lib_name_without_version" "$lib_name"
 
             # loop for all the other *.dylib file names
             for other_lib_name in *.dylib; do
