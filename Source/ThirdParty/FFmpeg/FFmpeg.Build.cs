@@ -56,18 +56,21 @@ public class FFmpeg : ModuleRules
             var LibAvcodecDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavcodec.dylib");
             var LibFormatDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavformat.dylib");
             var LibAvutilDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavutil.dylib");
+            var LibSwresampleDylibPath = Path.Combine(MacArchBinDirectoryPath, "libswresample.dylib");
             var LibSwscaleDylibPath = Path.Combine(MacArchBinDirectoryPath, "libswscale.dylib");
 
             // Delay-load the DLL, so we can load it from the right place first
             PublicDelayLoadDLLs.Add(LibAvcodecDylibPath);
             PublicDelayLoadDLLs.Add(LibFormatDylibPath);
             PublicDelayLoadDLLs.Add(LibAvutilDylibPath);
+            PublicDelayLoadDLLs.Add(LibSwresampleDylibPath);
             PublicDelayLoadDLLs.Add(LibSwscaleDylibPath);
 
             // Ensure that the DLL is staged along with the executable
             RuntimeDependencies.Add(LibAvcodecDylibPath);
             RuntimeDependencies.Add(LibFormatDylibPath);
             RuntimeDependencies.Add(LibAvutilDylibPath);
+            RuntimeDependencies.Add(LibSwresampleDylibPath);
             RuntimeDependencies.Add(LibSwscaleDylibPath);
         }
         // else if (Target.Platform == UnrealTargetPlatform.Android)
