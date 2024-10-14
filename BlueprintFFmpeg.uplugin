@@ -14,12 +14,6 @@
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
 	"Installed": false,
-	"PreBuildSteps": {
-		"Mac": [
-			"chmod +x \"$(PluginDir)/PreBuild.sh\"",
-			"\"$(PluginDir)/PreBuild.sh\""
-		]
-	},
 	"Modules": [
 		{
 			"Name": "BlueprintFFmpeg",

@@ -1,5 +1,6 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
+using System.Diagnostics;
 using System.IO;
 using UnrealBuildTool;
 
@@ -50,7 +51,15 @@ public class FFmpeg : ModuleRules
             // get FFmpeg lib directory path
             var FFmpegLibDirectoryPath = Path.Combine(FFmpegDirectoryPath, "lib");
 
-            PublicSystemIncludePaths.Add(FFmpegIncludeDirectoryPath);
+            // if at least one of the "include" or "lib" directory doesn't exist
+            if (!Directory.Exists(FFmpegIncludeDirectoryPath) || !Directory.Exists(FFmpegLibDirectoryPath)) {
+                // execute PreBuild.sh
+                Process.Start(new ProcessStartInfo("bash") {
+                    Arguments = Path.Combine(PluginDirectory, "PreBuild.sh")
+                }).WaitForExit();
+            }
+
+           PublicSystemIncludePaths.Add(FFmpegIncludeDirectoryPath);
 
             var MacArchBinDirectoryPath = Path.Combine(FFmpegLibDirectoryPath);
             var LibAvcodecDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavcodec.dylib");
