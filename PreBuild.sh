@@ -66,7 +66,7 @@ removeVersion() {
     # if config.h doesn't exist (i.e. configure has not executed)
     if [ ! -e config.h ]; then
         # invoke configure
-        ./configure --prefix="$(pwd)" --enable-rpath --enable-gpl --disable-static --enable-shared --disable-programs --disable-doc --enable-libx264 --arch=arm64 --enable-cross-compile
+        ./configure --prefix="$(pwd)" --extra-ldflags="-Wl,-rpath,@executable_path/dummy" --enable-gpl --disable-static --enable-shared --disable-programs --disable-doc --enable-libx264 --arch=arm64 --enable-cross-compile
     fi
 
     # Run make command
@@ -104,6 +104,9 @@ removeVersion() {
 
         # for all real dylib files
         for lib_name_with_version in *.dylib; do
+            # remove dummy rpath
+            install_name_tool -delete_rpath "@executable_path/dummy" "$lib_name_with_version"
+
             # rename it to a name that doesn't include the version number
             mv "$lib_name_with_version" "$(echo $lib_name_with_version | removeVersion)"
         done
