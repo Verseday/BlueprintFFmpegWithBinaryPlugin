@@ -51,15 +51,28 @@ public class FFmpeg : ModuleRules
             // get FFmpeg lib directory path
             var FFmpegLibDirectoryPath = Path.Combine(FFmpegDirectoryPath, "lib");
 
-            // if at least one of the "include" or "lib" directory doesn't exist
-            if (!Directory.Exists(FFmpegIncludeDirectoryPath) || !Directory.Exists(FFmpegLibDirectoryPath)) {
-                // execute PreBuild.sh
-                Process.Start(new ProcessStartInfo("bash") {
+            // create PreBuild.sh process info
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo("bash")
+                {
                     Arguments = Path.Combine(PluginDirectory, "PreBuild.sh")
-                }).WaitForExit();
+                }
+            };
+
+            // start process
+            process.Start();
+            
+            // Wait for the process until exit
+            process.WaitForExit();
+
+            // // if it has any error
+            if (process.ExitCode != 0) {
+                // throw error
+                throw new BuildException($"Failed to execute PreBuild.sh. Exit code: {process.ExitCode}");
             }
 
-           PublicSystemIncludePaths.Add(FFmpegIncludeDirectoryPath);
+            PublicSystemIncludePaths.Add(FFmpegIncludeDirectoryPath);
 
             var MacArchBinDirectoryPath = Path.Combine(FFmpegLibDirectoryPath);
             var LibAvcodecDylibPath = Path.Combine(MacArchBinDirectoryPath, "libavcodec.dylib");
